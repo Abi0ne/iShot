@@ -11,6 +11,8 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     private let state = ToolState()
     private let editorView: EditorView
     private let scrollView = NSScrollView()
+    private var toolbar: NSStackView!
+    private var actionBar: NSStackView!
 
     private var toolControl: NSSegmentedControl!
     private var colorWell: NSColorWell!
@@ -112,15 +114,22 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         undoButton = makeButton("Undo", symbol: "arrow.uturn.backward", action: #selector(undo))
         let clearButton = makeButton("Clear", symbol: "trash", action: #selector(clearAll))
 
-        let toolbar = NSStackView(views: [toolControl, separator(), swatchStack, colorWell, separator(),
+        toolbar = NSStackView(views: [toolControl, separator(), swatchStack, colorWell, separator(),
                                           widthPopup, NSView(), undoButton, clearButton])
         toolbar.orientation = .horizontal
         toolbar.spacing = 8
         toolbar.edgeInsets = NSEdgeInsets(top: 8, left: 12, bottom: 8, right: 12)
         toolbar.setHuggingPriority(.defaultLow, for: .horizontal)
 
-        // Canvas
+        // Canvas: images smaller than the window stay centered, with a soft shadow to show their edges.
+        scrollView.contentView = CenteringClipView()
         scrollView.documentView = editorView
+        editorView.wantsLayer = true
+        let shadow = NSShadow()
+        shadow.shadowColor = NSColor.black.withAlphaComponent(0.35)
+        shadow.shadowBlurRadius = 8
+        shadow.shadowOffset = NSSize(width: 0, height: -2)
+        editorView.shadow = shadow
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = true
         scrollView.autohidesScrollers = true
@@ -153,7 +162,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         hint.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         hintLabel = hint
 
-        let actionBar = NSStackView(views: [ocrSpinner, hint, NSView(), cancel, copyTextButton, ocrButton,
+        actionBar = NSStackView(views: [ocrSpinner, hint, NSView(), cancel, copyTextButton, ocrButton,
                                             shareButton, pin, copy, save])
         actionBar.orientation = .horizontal
         actionBar.spacing = 8
@@ -196,20 +205,33 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         return box
     }
 
-    /// Fits the window to the image (up to 85% of the screen), zooming out if needed.
+    /// Sizes the window to the capture:
+    /// - large shots fill the window, zoomed out if needed so the window stays within 85% of the screen;
+    /// - small shots sit centered in a modest window, just wide enough for the tool and action bars.
     private func sizeWindowToFit(_ window: NSWindow) {
-        let chromeHeight: CGFloat = 100
-        let minWidth: CGFloat = 860
-        let visible = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
-        let maxContent = NSSize(width: visible.width * 0.85, height: visible.height * 0.85 - chromeHeight)
+        let bars = [toolbar!, actionBar!]
+        let chromeHeight = bars.map { $0.fittingSize.height }.reduce(0, +)
+        let minWidth = max(600, ceil(bars.map { $0.fittingSize.width }.max() ?? 0))
+        let margin: CGFloat = 24          // breathing room around small shots
+        let minCanvasHeight: CGFloat = 220
+
+        let screen = NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) }
+            ?? NSScreen.main ?? NSScreen.screens.first
+        let visible = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+        let maxCanvas = NSSize(width: visible.width * 0.85, height: visible.height * 0.85 - chromeHeight)
+
         let image = editorView.imageSize
-        let zoom = min(1, maxContent.width / image.width, maxContent.height / image.height)
-        let contentSize = NSSize(width: max(minWidth, image.width * zoom + 2),
-                                 height: max(240, image.height * zoom + 2) + chromeHeight)
-        window.setContentSize(contentSize)
-        window.contentMinSize = NSSize(width: minWidth, height: 300)
-        window.center()
+        let zoom = min(1, maxCanvas.width / image.width, maxCanvas.height / image.height)
+        let shown = NSSize(width: image.width * zoom, height: image.height * zoom)
+        // Leave a margin only when the shot is not filling the screen-limited canvas.
+        let pad = zoom < 1 ? 0 : margin * 2
+        let canvas = NSSize(width: min(maxCanvas.width, max(minWidth, shown.width + pad)),
+                            height: min(maxCanvas.height, max(minCanvasHeight, shown.height + pad)))
+
+        window.setContentSize(NSSize(width: ceil(canvas.width), height: ceil(canvas.height + chromeHeight)))
+        window.contentMinSize = NSSize(width: minWidth, height: chromeHeight + 160)
         scrollView.magnification = zoom
+        window.center()
     }
 
     private func syncControls() {
@@ -497,5 +519,17 @@ private final class SwatchButton: NSButton {
         NSColor.separatorColor.setStroke()
         circle.lineWidth = 1
         circle.stroke()
+    }
+}
+
+/// Clip view that keeps a document smaller than the visible area centered instead of pinned to a corner.
+private final class CenteringClipView: NSClipView {
+    override func constrainBoundsRect(_ proposedBounds: NSRect) -> NSRect {
+        var rect = super.constrainBoundsRect(proposedBounds)
+        guard let document = documentView else { return rect }
+        let frame = document.frame
+        if rect.width > frame.width { rect.origin.x = frame.minX - (rect.width - frame.width) / 2 }
+        if rect.height > frame.height { rect.origin.y = frame.minY - (rect.height - frame.height) / 2 }
+        return rect
     }
 }
