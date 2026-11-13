@@ -29,6 +29,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.updateStatusIcon()
             self?.showAlert(title: "Recording stopped", message: error.localizedDescription)
         }
+
+        Updater.shared.checkOnLaunch()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -97,6 +99,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .toggleRecording: toggleRecording()
         case .ocrLastScreenshot: ocrLastScreenshot()
         case .settings: SettingsWindowController.shared.present()
+        case .checkForUpdates: Updater.shared.checkNow()
         case .about: showAbout()
         case .quit: NSApp.terminate(nil)
         }

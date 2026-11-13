@@ -274,3 +274,10 @@ open build/iShot.app
   sopravvive ai rebuild; `build-app.sh --install` installa in `/Applications`.
 - Cattura via ScreenCaptureKit (`SCScreenshotManager`) al posto di `CGDisplayCreateImage`.
 - OCR come Live Text direttamente nell'editor (VisionKit): testo selezionabile e copiabile sull'immagine.
+
+**v0.1.2**
+- Aggiornamento automatico all'apertura (`Support/Updater.swift`): legge l'ultima GitHub Release,
+  chiede conferma, scarica `iShot.zip`, verifica che l'app nuova soddisfi il designated requirement
+  di quella in esecuzione (stesso certificato), sostituisce il bundle e riavvia.
+  Menu "Check for Updates…", opzione nelle impostazioni, "Skip This Version".
+- `scripts/release.sh`: build firmata + zip + tag + push + `gh release create`.

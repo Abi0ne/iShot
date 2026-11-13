@@ -2,7 +2,7 @@ import AppKit
 
 /// Commands exposed by the status-bar menu.
 enum MenuCommand {
-    case captureRegion, captureFullscreen, toggleRecording, ocrLastScreenshot, settings, about, quit
+    case captureRegion, captureFullscreen, toggleRecording, ocrLastScreenshot, settings, checkForUpdates, about, quit
 }
 
 /// Builds and updates the menu attached to the status item.
@@ -35,6 +35,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         ocrItem = add("OCR Last Screenshot", symbol: "text.viewfinder", command: .ocrLastScreenshot)
         menu.addItem(.separator())
         add("Settings…", symbol: "gearshape", command: .settings, key: ",")
+        add("Check for Updates…", symbol: "arrow.down.circle", command: .checkForUpdates)
         add("Info", symbol: "info.circle", command: .about)
         menu.addItem(.separator())
         add("Quit iShot", symbol: nil, command: .quit, key: "q")

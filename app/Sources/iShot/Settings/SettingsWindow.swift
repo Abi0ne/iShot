@@ -10,6 +10,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
     private let prefixField = NSTextField()
     private let hotkeyRecorder = HotkeyRecorderButton()
     private let launchCheckbox = NSButton(checkboxWithTitle: "Launch iShot at login", target: nil, action: nil)
+    private let updatesCheckbox = NSButton(checkboxWithTitle: "Check for updates when iShot opens", target: nil, action: nil)
     private let previewLabel = NSTextField(labelWithString: "")
 
     private init() {
@@ -67,13 +68,22 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
 
         launchCheckbox.target = self
         launchCheckbox.action = #selector(launchChanged)
+        updatesCheckbox.target = self
+        updatesCheckbox.action = #selector(updatesChanged)
+        let checkNow = NSButton(title: "Check Now", target: self, action: #selector(checkForUpdatesNow))
+        let version = NSTextField(labelWithString: "Version \(Updater.shared.currentVersion)")
+        version.textColor = .secondaryLabelColor
+        version.font = .systemFont(ofSize: 11)
+        let updatesRow = NSStackView(views: [updatesCheckbox, checkNow, version])
+        updatesRow.spacing = 8
 
         let grid = NSGridView(views: [
             [label("Save to:"), folderRow],
             [label("Format:"), formatPopup],
             [label("File name prefix:"), prefixRow],
             [label("Capture shortcut:"), hotkeyRow],
-            [label("Startup:"), launchCheckbox]
+            [label("Startup:"), launchCheckbox],
+            [label("Updates:"), updatesRow]
         ])
         grid.rowSpacing = 12
         grid.columnSpacing = 10
@@ -111,6 +121,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
         prefixField.stringValue = store.fileNamePrefix
         hotkeyRecorder.hotkey = store.hotkey
         launchCheckbox.state = store.launchAtLogin ? .on : .off
+        updatesCheckbox.state = store.checkForUpdates ? .on : .off
         updatePreview()
     }
 
@@ -150,6 +161,14 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
     @objc private func resetHotkey() {
         store.hotkey = .default
         hotkeyRecorder.hotkey = .default
+    }
+
+    @objc private func updatesChanged() {
+        store.checkForUpdates = updatesCheckbox.state == .on
+    }
+
+    @objc private func checkForUpdatesNow() {
+        Updater.shared.checkNow()
     }
 
     @objc private func launchChanged() {

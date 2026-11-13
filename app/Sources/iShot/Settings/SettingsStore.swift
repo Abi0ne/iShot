@@ -83,6 +83,8 @@ final class SettingsStore {
         static let hotkeyKeyCode = "hotkeyKeyCode"
         static let hotkeyModifiers = "hotkeyModifiers"
         static let launchAtLogin = "launchAtLogin"
+        static let checkForUpdates = "checkForUpdates"
+        static let skippedVersion = "skippedVersion"
     }
 
     private let defaults: UserDefaults
@@ -137,6 +139,18 @@ final class SettingsStore {
     var launchAtLogin: Bool {
         get { defaults.bool(forKey: Key.launchAtLogin) }
         set { defaults.set(newValue, forKey: Key.launchAtLogin) }
+    }
+
+    /// Check GitHub for a newer release at launch (default: on).
+    var checkForUpdates: Bool {
+        get { defaults.object(forKey: Key.checkForUpdates) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: Key.checkForUpdates) }
+    }
+
+    /// A release the user chose to skip in the update prompt.
+    var skippedVersion: String? {
+        get { defaults.string(forKey: Key.skippedVersion) }
+        set { defaults.set(newValue, forKey: Key.skippedVersion) }
     }
 
     /// Registers/unregisters the app as a login item. Throws if the system refuses.

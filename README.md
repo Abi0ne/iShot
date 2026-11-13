@@ -55,6 +55,24 @@ iShot has no Dock icon. Look for the viewfinder icon in the menu bar.
 - **Settings**: save folder (default `~/Pictures/Screenshots`), format (PNG/JPG), file name prefix
   (files are named `prefix_YYYYMMDD_HHMMSS.ext`), global shortcut recorder and launch at login.
 
+## Updates
+
+At launch iShot checks the latest [GitHub release](https://github.com/Abi0ne/iShot/releases). If it is newer
+than the installed version, iShot asks to install it, downloads `iShot.zip`, checks that the new app is signed
+with the **same certificate** as the running one (otherwise it refuses to install it), replaces the app in place
+and relaunches. You can also choose *Check for Updates…* from the menu, turn the automatic check off in
+Settings, or skip a version.
+
+To publish an update:
+
+```sh
+# 1. set VERSION in scripts/build-app.sh (e.g. 0.1.3) and commit
+scripts/release.sh "What changed"   # 2. build + sign + zip + tag + push + GitHub release
+```
+
+The release must be signed with "iShot Local Signing" from the same keychain: an app signed with
+another certificate is rejected by the updater.
+
 ## Screen Recording permission
 
 macOS requires the **Screen Recording** permission before an app can read screen pixels or record the screen.
@@ -84,7 +102,8 @@ app/Sources/iShot/             main, AppDelegate, StatusMenu
   Recording/                   ScreenRecorder (ScreenCaptureKit)
   Settings/                    SettingsStore, SettingsWindow
   Shortcut/                    GlobalShortcut (Carbon hotkey)
-  Support/                     Exporter, PinWindow
+  Support/                     Exporter, PinWindow, Updater (GitHub releases)
 scripts/build-app.sh           build + bundle + sign (+ --install)
 scripts/create-signing-cert.sh one-time local code-signing certificate
+scripts/release.sh             publish a GitHub release (picked up by the in-app updater)
 ```
