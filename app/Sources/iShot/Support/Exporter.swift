@@ -87,6 +87,51 @@ enum Exporter {
             if (try? data.write(to: tmp, options: .atomic)) != nil { items = [tmp] }
         }
         let picker = NSSharingServicePicker(items: items)
+        picker.delegate = ShareExtras.shared
+        ShareExtras.shared.image = image
+        ShareExtras.shared.scale = scale
         picker.show(relativeTo: view.bounds, of: view, preferredEdge: .minY)
+    }
+}
+
+/// Adds services the system share menu cannot offer on its own.
+///
+/// WhatsApp for Mac ships no Share extension (only Intents and notification extensions), so macOS
+/// never lists it in the share menu or in System Settings. It does open images, though: the
+/// "WhatsApp" entry hands it the screenshot file and also puts the image on the clipboard, so ⌘V
+/// in a chat works too.
+final class ShareExtras: NSObject, NSSharingServicePickerDelegate {
+    static let shared = ShareExtras()
+    static let whatsAppBundleID = "net.whatsapp.WhatsApp"
+
+    var image: CGImage?
+    var scale: CGFloat = 1
+
+    func sharingServicePicker(_ sharingServicePicker: NSSharingServicePicker,
+                              sharingServicesForItems items: [Any],
+                              proposedSharingServices proposedServices: [NSSharingService]) -> [NSSharingService] {
+        guard let whatsApp = whatsAppService(for: items) else { return proposedServices }
+        return [whatsApp] + proposedServices
+    }
+
+    private func whatsAppService(for items: [Any]) -> NSSharingService? {
+        guard let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: Self.whatsAppBundleID),
+              let fileURL = items.compactMap({ $0 as? URL }).first(where: \.isFileURL) else { return nil }
+        let icon = NSWorkspace.shared.icon(forFile: appURL.path)
+        let image = self.image, scale = self.scale
+        return NSSharingService(title: "WhatsApp", image: icon, alternateImage: nil) {
+            if let image { Exporter.copyToClipboard(image, scale: scale) }
+            let configuration = NSWorkspace.OpenConfiguration()
+            configuration.activates = true
+            NSWorkspace.shared.open([fileURL], withApplicationAt: appURL, configuration: configuration) { _, error in
+                guard let error else { return }
+                DispatchQueue.main.async {
+                    let alert = NSAlert()
+                    alert.messageText = "Could not open WhatsApp"
+                    alert.informativeText = error.localizedDescription + "\n\nThe image is on the clipboard: paste it into a chat with ⌘V."
+                    alert.runModal()
+                }
+            }
+        }
     }
 }

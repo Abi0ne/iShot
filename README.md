@@ -43,6 +43,9 @@ iShot has no Dock icon. Look for the viewfinder icon in the menu bar.
   - There are 8 preset colors plus a custom color well, and 6 line widths (the width also sets the text size).
   - Use Undo (⌘Z) or Clear to remove changes. With the select tool, ⌫ deletes the selected annotation and a double-click edits text.
 - **Actions**: Save (↩ / ⌘S), Copy (⌘C), Pin (⌘P), OCR, Share, Cancel (Esc).
+- **Share**: the system share menu, plus a **WhatsApp** entry. WhatsApp for Mac has no Share extension, so
+  macOS cannot list it; iShot opens the screenshot in WhatsApp directly and also copies it to the clipboard
+  (⌘V in a chat works as a fallback).
 - **Pin**: shows the image in a borderless window that stays on top. Drag it to move it, scroll to zoom,
   and double-click or press Esc to close it.
 - **OCR (Live Text)**: press OCR in the editor and the text is recognized on the device and made selectable

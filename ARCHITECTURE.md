@@ -281,3 +281,6 @@ open build/iShot.app
   di quella in esecuzione (stesso certificato), sostituisce il bundle e riavvia.
   Menu "Check for Updates…", opzione nelle impostazioni, "Skip This Version".
 - `scripts/release.sh`: build firmata + zip + tag + push + `gh release create`.
+- Condivisione su WhatsApp: WhatsApp per Mac non ha una Share extension, quindi `ShareExtras`
+  (in `Support/Exporter.swift`) aggiunge una voce "WhatsApp" al picker che apre l'immagine in
+  WhatsApp e la copia negli appunti.
