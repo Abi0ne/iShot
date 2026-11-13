@@ -5,11 +5,13 @@ import ScreenCaptureKit
 enum CaptureError: LocalizedError {
     case displayNotFound
     case emptyRect
+    case windowNotFound
 
     var errorDescription: String? {
         switch self {
         case .displayNotFound: return "The display to capture could not be found."
         case .emptyRect: return "The selected area is empty."
+        case .windowNotFound: return "The window to capture is no longer on screen."
         }
     }
 }
@@ -111,6 +113,31 @@ enum ScreenCapture {
         config.captureResolution = .best
         config.colorSpaceName = CGColorSpace.sRGB
         return try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
+    }
+
+    /// Captures a single window by its CoreGraphics window number, without the windows covering it
+    /// and without its shadow, at the display's native pixel density.
+    static func captureWindow(_ windowID: CGWindowID) async throws -> CGImage {
+        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        guard let window = content.windows.first(where: { $0.windowID == windowID }) else {
+            throw CaptureError.windowNotFound
+        }
+        let filter = SCContentFilter(desktopIndependentWindow: window)
+        let scale = CGFloat(filter.pointPixelScale)
+        let config = SCStreamConfiguration()
+        config.width = max(1, Int((filter.contentRect.width * scale).rounded()))
+        config.height = max(1, Int((filter.contentRect.height * scale).rounded()))
+        config.showsCursor = false
+        config.captureResolution = .best
+        config.ignoreShadowsSingleWindow = true
+        config.colorSpaceName = CGColorSpace.sRGB
+        return try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
+    }
+
+    /// Converts a CoreGraphics global rect (top-left origin) to AppKit global space (bottom-left origin).
+    static func appKitRect(fromCG rect: CGRect) -> NSRect {
+        let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
+        return NSRect(x: rect.minX, y: primaryHeight - rect.maxY, width: rect.width, height: rect.height)
     }
 
     /// Converts an AppKit global rect (bottom-left origin) to CoreGraphics global space (top-left origin).

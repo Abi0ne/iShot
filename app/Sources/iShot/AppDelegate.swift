@@ -143,13 +143,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard overlay == nil, ensureCapturePermission() else { return }
         let overlay = RegionOverlay()
         self.overlay = overlay
-        overlay.begin { [weak self] rect in
+        overlay.begin { [weak self] result in
             guard let self else { return }
             self.overlay = nil
-            guard let rect else { return }
+            guard let result else { return }
             // Let the overlay windows disappear from the screen before grabbing pixels.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                self.captureAndEdit(appKitRect: rect)
+                switch result {
+                case let .region(rect): self.captureAndEdit(appKitRect: rect)
+                case let .window(target): self.captureWindowAndEdit(target)
+                }
+            }
+        }
+    }
+
+    private func captureWindowAndEdit(_ target: WindowTarget) {
+        Task { @MainActor in
+            do {
+                let image = try await ScreenCapture.captureWindow(target.id)
+                openEditor(with: image, scale: CGFloat(image.width) / max(target.frame.width, 1))
+            } catch {
+                showCaptureError(error, fallback: "The window could not be captured.")
             }
         }
     }

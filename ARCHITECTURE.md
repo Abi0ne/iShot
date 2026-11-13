@@ -284,3 +284,9 @@ open build/iShot.app
 - Condivisione su WhatsApp: WhatsApp per Mac non ha una Share extension, quindi `ShareExtras`
   (in `Support/Exporter.swift`) aggiunge una voce "WhatsApp" al picker che apre l'immagine in
   WhatsApp e la copia negli appunti.
+
+**v0.1.3**
+- Aggancio finestra ("magnet"): l'overlay di cattura evidenzia subito la finestra in primo piano
+  (lista `CGWindowListCopyWindowInfo`, layer 0, altre app) e segue quella sotto il puntatore;
+  clic/↩ la cattura intera con `SCContentFilter(desktopIndependentWindow:)`, trascinare fa la
+  selezione libera come prima.

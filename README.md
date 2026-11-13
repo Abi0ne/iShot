@@ -35,8 +35,12 @@ iShot has no Dock icon. Look for the viewfinder icon in the menu bar.
 
 ## Features
 
-- **Capture Region**: a dimmed overlay covers every screen. Drag to select an area; a label shows the size in pixels while you drag.
-  Press Esc or right-click to cancel. The default global shortcut is **⌥⇧A** (you can change it in Settings).
+- **Capture Region**: a dimmed overlay covers every screen and **snaps to the window in front**, outlined in
+  blue with its size. Move the pointer over another window to snap to that one instead.
+  - **Click** (or ↩) captures the snapped window in full, without its shadow and even if other windows cover
+    part of it (ScreenCaptureKit window capture).
+  - **Drag** anywhere to select a custom area; a label shows the size in pixels while you drag.
+  - Press Esc or right-click to cancel. The default global shortcut is **⌥⇧A** (you can change it in Settings).
 - **Capture Fullscreen**: captures the display under the mouse pointer.
 - **Editor tools**: select/move, pen (smoothed), rectangle, ellipse, line, arrow, text and mosaic (pixelation).
   - Hold ⇧ while dragging to draw squares or circles, or to snap lines to 45°.
