@@ -1,7 +1,7 @@
 # iShot — Clone di **iScreen Shoter**
 
 > Documentazione di progetto: analisi dell'originale + ragionamento + architettura del clone.
-> Tutto il progetto vive sotto `/Users/gmanc/Work/iShot/`.
+> Tutto il progetto vive sotto questa cartella (root del repo).
 
 ---
 
@@ -86,7 +86,7 @@ altri progetti (iRufus, reika-monitor, wolwatcher, NetScout) è:
 | UI | **AppKit** (NSWindow/NSView/NSStatusItem) | app menu bar + drawing custom; SwiftUI non serve e complica la build CLT |
 | Cattura schermo | **ScreenCaptureKit** (`SCScreenshotManager`) | API attuale; `CGDisplayCreateImage` è deprecata e fa richiedere di nuovo il permesso |
 | Selezione regione | **overlay** borderless a schermo intero + drag | standard per screenshot tool |
-| OCR | **Vision** (`VNRecognizeTextRequest`) | nativo, offline, niente dipendenze |
+| OCR | **VisionKit** Live Text (`ImageAnalyzer` + `ImageAnalysisOverlayView`) nell'editor; **Vision** come fallback | testo selezionabile direttamente sull'immagine, offline |
 | Scorciatoia globale | **Carbon** `RegisterEventHotKey` | API nativa, nessuna libreria esterna |
 | Registrazione video | **ScreenCaptureKit** (macOS 12.3+) | API moderna per capture+audio; fallback: solo se disponibile |
 | Persistenza | **UserDefaults** | cartella/formato/nome/shortcut |
@@ -109,7 +109,7 @@ Lottie, 7 lingue (parto da en + it), helper separato (registro nello stesso proc
 
 ### 4.1 Layout cartelle
 ```
-/Users/gmanc/Work/iShot/
+iShot/
 ├── ARCHITECTURE.md            ← questo file
 ├── README.md                  ← come buildare/avviare
 ├── app/
@@ -176,7 +176,7 @@ Lottie, 7 lingue (parto da en + it), helper separato (registro nello stesso proc
    → EditorWindow(EditorView + annotazioni)
         → Salva | Copia | Pin | OCR | Share
 
-[Menu] → OCR ultimo screenshot → OCRService → finestra testo / clipboard
+[Menu] → OCR ultimo screenshot → editor in modalità testo (Live Text)
 
 [Menu] → ScreenRecorder.start() → … → stop() → file .mov in saveDir
 ```
@@ -225,7 +225,7 @@ struct Settings {
 
 ### 5.2 Avvio
 ```
-cd /Users/gmanc/Work/iShot
+cd iShot
 scripts/build-app.sh
 open build/iShot.app
 ```
@@ -267,4 +267,10 @@ open build/iShot.app
 - 16 file Swift (~2550 righe), tutti i moduli del §4.2 implementati.
 - Build release + bundle + firma con certificato locale via `scripts/build-app.sh`; icona `AppIcon.icns` generata.
 - Smoke test: l'app parte e resta in esecuzione come menu bar app.
-- Versione: `CFBundleShortVersionString = 0.1.0`, `CFBundleVersion` = numero commit git.
+- Versione: `CFBundleShortVersionString = 0.1.1`, `CFBundleVersion` = numero commit git.
+
+**v0.1.1**
+- Firma con certificato locale stabile (`scripts/create-signing-cert.sh`): il permesso Screen Recording
+  sopravvive ai rebuild; `build-app.sh --install` installa in `/Applications`.
+- Cattura via ScreenCaptureKit (`SCScreenshotManager`) al posto di `CGDisplayCreateImage`.
+- OCR come Live Text direttamente nell'editor (VisionKit): testo selezionabile e copiabile sull'immagine.

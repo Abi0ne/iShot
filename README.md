@@ -9,7 +9,7 @@ annotate the shot, and can save, copy, pin, share, run OCR and record the screen
 Requirements: macOS 14+, Swift 5.9+ and the Command Line Tools. Xcode is **not** required.
 
 ```sh
-cd /Users/gmanc/Work/iShot
+cd iShot
 scripts/create-signing-cert.sh   # once: creates the "iShot Local Signing" certificate
 scripts/build-app.sh --install   # build, sign, copy to /Applications and launch
 ```
@@ -45,7 +45,11 @@ iShot has no Dock icon. Look for the viewfinder icon in the menu bar.
 - **Actions**: Save (↩ / ⌘S), Copy (⌘C), Pin (⌘P), OCR, Share, Cancel (Esc).
 - **Pin**: shows the image in a borderless window that stays on top. Drag it to move it, scroll to zoom,
   and double-click or press Esc to close it.
-- **OCR**: Vision recognizes the text on the device. You can run it from the editor or with *OCR Last Screenshot*.
+- **OCR (Live Text)**: press OCR in the editor and the text is recognized on the device and made selectable
+  right on the image (VisionKit). Drag to select, ⌘C copies the selection (or all text if nothing is
+  selected), *Copy All Text* copies everything, Esc or OCR again leaves text mode. *OCR Last Screenshot*
+  opens the last shot in the editor in text mode. Without Live Text support, the recognized text is
+  copied to the clipboard.
 - **Record Screen**: ScreenCaptureKit records the display under the pointer to `.mov` (H.264, 30 fps).
   Choose *Stop Recording* to finish; the file then appears in Finder.
 - **Settings**: save folder (default `~/Pictures/Screenshots`), format (PNG/JPG), file name prefix
@@ -76,7 +80,7 @@ app/Package.swift              SwiftPM package (executable target "iShot", macOS
 app/Sources/iShot/             main, AppDelegate, StatusMenu
   Capture/                     ScreenCapture, RegionOverlay
   Editor/                      Annotation, Tools, EditorView, EditorWindow
-  OCR/                         OCRService (+ result window)
+  OCR/                         OCRService (Vision fallback; Live Text lives in the editor)
   Recording/                   ScreenRecorder (ScreenCaptureKit)
   Settings/                    SettingsStore, SettingsWindow
   Shortcut/                    GlobalShortcut (Carbon hotkey)

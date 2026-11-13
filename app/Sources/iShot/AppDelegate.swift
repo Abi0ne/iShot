@@ -10,6 +10,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Most recent screenshot (raw capture, replaced by the annotated version once exported).
     private var lastScreenshot: CGImage?
+    /// Pixels per point of `lastScreenshot` (2 on Retina).
+    private var lastScreenshotScale: CGFloat = 1
 
     // MARK: - Lifecycle
 
@@ -189,6 +191,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func openEditor(with image: CGImage, scale: CGFloat) {
         lastScreenshot = image
+        lastScreenshotScale = scale
         EditorWindowController.show(image: image, scale: scale) { [weak self] final in
             self?.lastScreenshot = final
         }
@@ -199,12 +202,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             showAlert(title: "No screenshot yet", message: "Capture a region or the full screen first.")
             return
         }
-        OCRService.recognize(from: image) { [weak self] result in
-            switch result {
-            case let .success(text): OCRResultWindow.show(text: text)
-            case let .failure(error): self?.showAlert(title: "Text recognition failed", message: error.localizedDescription)
-            }
+        // Open the shot in the editor with its text selectable in place (Live Text).
+        let controller = EditorWindowController.show(image: image, scale: lastScreenshotScale) { [weak self] final in
+            self?.lastScreenshot = final
         }
+        controller.startTextRecognition()
     }
 
     private func toggleRecording() {

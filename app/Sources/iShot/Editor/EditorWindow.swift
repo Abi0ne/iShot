@@ -1,4 +1,5 @@
 import AppKit
+import VisionKit
 
 /// Editor window: tool bar on top, scrollable canvas in the middle, action bar at the bottom.
 final class EditorWindowController: NSWindowController, NSWindowDelegate {
@@ -16,6 +17,16 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     private var widthPopup: NSPopUpButton!
     private var undoButton: NSButton!
     private var shareButton: NSButton!
+    private var ocrButton: NSButton!
+    private var copyTextButton: NSButton!
+    private var hintLabel: NSTextField!
+    private let ocrSpinner = NSProgressIndicator()
+
+    // Text mode (Live Text over the image)
+    private var textOverlay: ImageAnalysisOverlayView?
+    private var analysis: ImageAnalysis?
+    private var analysisTask: Task<Void, Never>?
+    private static let defaultHint = "⌘S Save · ⌘C Copy · ⌘Z Undo · ⌫ Delete · Esc Cancel"
 
     private static let swatches: [NSColor] = [.systemRed, .systemOrange, .systemYellow, .systemGreen,
                                               .systemBlue, .systemPurple, .black, .white]
@@ -52,7 +63,12 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         sizeWindowToFit(window)
         syncControls()
         state.onChange = { [weak self] in self?.syncControls() }
-        editorView.onChange = { [weak self] in self?.syncControls() }
+        editorView.onChange = { [weak self] in
+            guard let self else { return }
+            // Recognized text no longer matches the image once annotations change.
+            if self.isInTextMode { self.endTextMode() }
+            self.syncControls()
+        }
     }
 
     @available(*, unavailable)
@@ -120,14 +136,25 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         save.keyEquivalent = "\r"
         let copy = makeButton("Copy", symbol: "doc.on.doc", action: #selector(copyImage))
         let pin = makeButton("Pin", symbol: "pin", action: #selector(pin))
-        let ocr = makeButton("OCR", symbol: "text.viewfinder", action: #selector(runOCR))
+        ocrButton = makeButton("OCR", symbol: "text.viewfinder", action: #selector(runOCR))
+        ocrButton.setButtonType(.pushOnPushOff)
+        ocrButton.toolTip = "Make the text in the image selectable (Live Text)"
+        copyTextButton = makeButton("Copy All Text", symbol: "doc.on.clipboard", action: #selector(copyAllText))
+        copyTextButton.isHidden = true
+        ocrSpinner.style = .spinning
+        ocrSpinner.controlSize = .small
+        ocrSpinner.isDisplayedWhenStopped = false
         shareButton = makeButton("Share", symbol: "square.and.arrow.up", action: #selector(share))
         let cancel = makeButton("Cancel", symbol: "xmark", action: #selector(cancelClicked))
-        let hint = NSTextField(labelWithString: "⌘S Save · ⌘C Copy · ⌘Z Undo · ⌫ Delete · Esc Cancel")
+        let hint = NSTextField(labelWithString: Self.defaultHint)
         hint.textColor = .secondaryLabelColor
         hint.font = .systemFont(ofSize: 11)
+        hint.lineBreakMode = .byTruncatingTail
+        hint.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        hintLabel = hint
 
-        let actionBar = NSStackView(views: [hint, NSView(), cancel, ocr, shareButton, pin, copy, save])
+        let actionBar = NSStackView(views: [ocrSpinner, hint, NSView(), cancel, copyTextButton, ocrButton,
+                                            shareButton, pin, copy, save])
         actionBar.orientation = .horizontal
         actionBar.spacing = 8
         actionBar.edgeInsets = NSEdgeInsets(top: 8, left: 12, bottom: 8, right: 12)
@@ -196,6 +223,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     // MARK: - Tool bar actions
 
     @objc private func toolChanged() {
+        endTextMode()
         editorView.commitTextEditing()
         state.tool = Tool.allCases[toolControl.selectedSegment]
     }
@@ -253,14 +281,125 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         PinWindow.pin(image, scale: editorView.scale, near: origin)
     }
 
+    // MARK: - Text mode (OCR)
+
+    private var isInTextMode: Bool { textOverlay != nil || analysisTask != nil }
+
     @objc private func runOCR() {
-        guard let image = editorView.renderedImage() else { return }
-        OCRService.recognize(from: image) { [weak self] result in
-            switch result {
-            case let .success(text): OCRResultWindow.show(text: text)
-            case let .failure(error): self?.showError(error)
+        if isInTextMode { endTextMode() } else { startTextRecognition() }
+    }
+
+    /// Recognizes the text in the image and lays it over the canvas as Live Text: it can be
+    /// selected with the mouse and copied with ⌘C, or copied at once with "Copy All Text".
+    func startTextRecognition() {
+        guard !isInTextMode, let image = editorView.renderedImage() else { return }
+        ocrButton.state = .on
+        ocrSpinner.startAnimation(nil)
+        setHint("Recognizing text…")
+
+        guard ImageAnalyzer.isSupported else {
+            recognizeWithVision(image)
+            return
+        }
+        analysisTask = Task { @MainActor [weak self] in
+            do {
+                let configuration = ImageAnalyzer.Configuration([.text])
+                let analysis = try await ImageAnalyzer().analyze(image, orientation: .up, configuration: configuration)
+                guard let self, !Task.isCancelled else { return }
+                self.analysisTask = nil
+                self.showTextOverlay(analysis)
+            } catch {
+                guard let self, !Task.isCancelled else { return }
+                self.analysisTask = nil
+                self.recognizeWithVision(image)
             }
         }
+    }
+
+    private func showTextOverlay(_ analysis: ImageAnalysis) {
+        ocrSpinner.stopAnimation(nil)
+        guard analysis.hasResults(for: .text) else {
+            endTextMode()
+            setHint("No text found in the image.", flash: true)
+            return
+        }
+        self.analysis = analysis
+
+        let overlay = ImageAnalysisOverlayView(frame: editorView.bounds)
+        overlay.autoresizingMask = [.width, .height]
+        overlay.preferredInteractionTypes = .textSelection
+        overlay.analysis = analysis
+        overlay.selectableItemsHighlighted = true
+        editorView.addSubview(overlay)
+        textOverlay = overlay
+        window?.makeFirstResponder(overlay)
+
+        copyTextButton.isHidden = false
+        let lines = analysis.transcript.split(whereSeparator: \.isNewline).count
+        setHint("\(lines) line\(lines == 1 ? "" : "s") of text found — drag to select, ⌘C to copy · Esc to exit")
+    }
+
+    /// Fallback when Live Text is unavailable: plain Vision OCR, copied straight to the clipboard.
+    private func recognizeWithVision(_ image: CGImage) {
+        OCRService.recognize(from: image) { [weak self] result in
+            guard let self else { return }
+            self.endTextMode()
+            switch result {
+            case let .success(text) where text.isEmpty:
+                self.setHint("No text found in the image.", flash: true)
+            case let .success(text):
+                Exporter.copyToClipboard(text)
+                let lines = text.split(whereSeparator: \.isNewline).count
+                self.setHint("Copied \(lines) line\(lines == 1 ? "" : "s") of text to the clipboard.", flash: true)
+            case let .failure(error):
+                self.showError(error)
+            }
+        }
+    }
+
+    func endTextMode() {
+        analysisTask?.cancel()
+        analysisTask = nil
+        textOverlay?.removeFromSuperview()
+        textOverlay = nil
+        analysis = nil
+        ocrSpinner.stopAnimation(nil)
+        ocrButton.state = .off
+        copyTextButton.isHidden = true
+        setHint(Self.defaultHint)
+        window?.makeFirstResponder(editorView)
+    }
+
+    @objc private func copyAllText() {
+        guard let text = analysis?.transcript, !text.isEmpty else { return }
+        Exporter.copyToClipboard(text)
+        setHint("All text copied to the clipboard.", flash: true)
+    }
+
+    /// Copies the selected text, or everything when nothing is selected.
+    private func copySelectedText() {
+        if let overlay = textOverlay, overlay.hasActiveTextSelection, !overlay.selectedText.isEmpty {
+            Exporter.copyToClipboard(overlay.selectedText)
+            setHint("Selected text copied to the clipboard.", flash: true)
+        } else {
+            copyAllText()
+        }
+    }
+
+    private var hintResetWork: DispatchWorkItem?
+
+    /// Shows a status message; with `flash`, it reverts after a few seconds.
+    private func setHint(_ text: String, flash: Bool = false) {
+        hintResetWork?.cancel()
+        hintLabel.stringValue = text
+        hintLabel.textColor = text == Self.defaultHint ? .secondaryLabelColor : .labelColor
+        guard flash else { return }
+        let previous = textOverlay != nil
+            ? "Drag to select text, ⌘C to copy · Esc to exit"
+            : Self.defaultHint
+        let work = DispatchWorkItem { [weak self] in self?.setHint(previous) }
+        hintResetWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3, execute: work)
     }
 
     @objc private func share() {
@@ -271,7 +410,9 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     @objc private func cancelClicked() { window?.close() }
 
     private func cancel() {
-        if editorView.isEditingText {
+        if isInTextMode {
+            endTextMode()
+        } else if editorView.isEditingText {
             editorView.commitTextEditing()
         } else {
             window?.close()
@@ -290,6 +431,10 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         guard !editorView.isEditingText else { return false }
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         guard flags == .command, let key = event.charactersIgnoringModifiers?.lowercased() else { return false }
+        if isInTextMode, key == "c" {
+            copySelectedText()
+            return true
+        }
         switch key {
         case "s": save()
         case "c": copyImage()
@@ -307,6 +452,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     // MARK: - NSWindowDelegate
 
     func windowWillClose(_ notification: Notification) {
+        analysisTask?.cancel()
         editorView.commitTextEditing()
         EditorWindowController.open.remove(self)
     }
