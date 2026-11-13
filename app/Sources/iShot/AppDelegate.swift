@@ -106,14 +106,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if ScreenCapture.hasPermission { return true }
         let alert = NSAlert()
         alert.messageText = "Screen Recording permission required"
-        alert.informativeText = "Allow iShot in System Settings › Privacy & Security › Screen & System Audio Recording, then relaunch iShot."
+        alert.informativeText = """
+            Allow iShot in System Settings › Privacy & Security › Screen & System Audio Recording, \
+            then relaunch iShot: macOS applies the permission only after a relaunch.
+
+            If iShot is already enabled there, remove it with “−” and allow it again.
+            """
         alert.addButton(withTitle: "Open System Settings")
+        alert.addButton(withTitle: "Relaunch iShot")
         alert.addButton(withTitle: "Cancel")
         NSApp.activate(ignoringOtherApps: true)
-        if alert.runModal() == .alertFirstButtonReturn {
-            openScreenRecordingSettings()
+        switch alert.runModal() {
+        case .alertFirstButtonReturn: openScreenRecordingSettings()
+        case .alertSecondButtonReturn: relaunch()
+        default: break
         }
         return false
+    }
+
+    /// Starts a fresh copy of the bundle once this process has exited, then quits.
+    private func relaunch() {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/bin/sh")
+        task.arguments = ["-c", "while kill -0 \(ProcessInfo.processInfo.processIdentifier) 2>/dev/null; do sleep 0.2; done; /usr/bin/open \"$0\"",
+                          Bundle.main.bundlePath]
+        try? task.run()
+        NSApp.terminate(nil)
     }
 
     private func captureRegion() {
@@ -133,24 +151,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func captureAndEdit(appKitRect rect: NSRect) {
         let cgRect = ScreenCapture.cgRect(fromAppKit: rect)
-        guard let image = ScreenCapture.capture(globalRect: cgRect) else {
-            showAlert(title: "Capture failed", message: "The selected area could not be captured.")
-            return
+        Task { @MainActor in
+            do {
+                let image = try await ScreenCapture.capture(globalRect: cgRect)
+                // Image pixels per point (2 on Retina) so the editor shows it at its real size.
+                let scale = CGFloat(image.width) / max(rect.width, 1)
+                openEditor(with: image, scale: scale)
+            } catch {
+                showCaptureError(error, fallback: "The selected area could not be captured.")
+            }
         }
-        // Image pixels per point (2 on Retina) so the editor shows it at its real size.
-        let scale = CGFloat(image.width) / max(rect.width, 1)
-        openEditor(with: image, scale: scale)
     }
 
     private func captureFullscreen() {
         guard ensureCapturePermission() else { return }
         let mouse = NSEvent.mouseLocation
         let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main
-        guard let screen, let image = ScreenCapture.captureDisplay(screen.displayID ?? CGMainDisplayID()) else {
-            showAlert(title: "Capture failed", message: "The screen could not be captured.")
-            return
+        guard let screen else { return }
+        Task { @MainActor in
+            do {
+                let image = try await ScreenCapture.captureDisplay(screen.displayID ?? CGMainDisplayID())
+                openEditor(with: image, scale: CGFloat(image.width) / screen.frame.width)
+            } catch {
+                showCaptureError(error, fallback: "The screen could not be captured.")
+            }
         }
-        openEditor(with: image, scale: CGFloat(image.width) / screen.frame.width)
+    }
+
+    private func showCaptureError(_ error: Error, fallback: String) {
+        // A TCC denial from ScreenCaptureKit means the permission is missing or stale.
+        if !ScreenCapture.hasPermission {
+            _ = ensureCapturePermission()
+        } else {
+            showAlert(title: "Capture failed", message: "\(fallback)\n\(error.localizedDescription)")
+        }
     }
 
     private func openEditor(with image: CGImage, scale: CGFloat) {

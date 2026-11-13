@@ -1,7 +1,23 @@
 import AppKit
 import CoreGraphics
+import ScreenCaptureKit
 
-/// Screen capture helpers built on CoreGraphics.
+enum CaptureError: LocalizedError {
+    case displayNotFound
+    case emptyRect
+
+    var errorDescription: String? {
+        switch self {
+        case .displayNotFound: return "The display to capture could not be found."
+        case .emptyRect: return "The selected area is empty."
+        }
+    }
+}
+
+/// Screen capture helpers built on ScreenCaptureKit (`SCScreenshotManager`).
+///
+/// The legacy `CGDisplayCreateImage` API is deprecated since macOS 15 and makes the system
+/// re-ask for Screen Recording periodically, so it is no longer used.
 ///
 /// Coordinate systems:
 /// - AppKit global space: origin at the bottom-left of the primary screen, y grows upward.
@@ -10,6 +26,7 @@ import CoreGraphics
 enum ScreenCapture {
 
     /// Returns true if the process already has the Screen Recording permission.
+    /// Note: after granting it in System Settings the process must be relaunched before this turns true.
     static var hasPermission: Bool { CGPreflightScreenCaptureAccess() }
 
     /// Asks macOS for the Screen Recording permission (shows the system prompt once).
@@ -17,50 +34,47 @@ enum ScreenCapture {
     static func requestPermission() -> Bool { CGRequestScreenCaptureAccess() }
 
     /// Captures an entire display at native pixel resolution.
-    static func captureDisplay(_ displayID: CGDirectDisplayID = CGMainDisplayID()) -> CGImage? {
-        CGDisplayCreateImage(displayID)
-    }
-
-    /// Captures the display that hosts the mouse cursor.
-    static func captureScreenUnderMouse() -> CGImage? {
-        let mouse = NSEvent.mouseLocation
-        let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main
-        return captureDisplay(screen?.displayID ?? CGMainDisplayID())
+    static func captureDisplay(_ displayID: CGDirectDisplayID = CGMainDisplayID()) async throws -> CGImage {
+        let display = try await scDisplay(for: displayID)
+        return try await capture(display: display, sourceRect: nil)
     }
 
     /// Captures a rectangle expressed in CoreGraphics global coordinates (points).
     /// Rectangles spanning several displays are composited into a single image.
-    static func capture(globalRect rect: CGRect) -> CGImage? {
+    static func capture(globalRect rect: CGRect) async throws -> CGImage {
         let rect = rect.integral
-        guard rect.width >= 1, rect.height >= 1 else { return nil }
+        guard rect.width >= 1, rect.height >= 1 else { throw CaptureError.emptyRect }
 
         var count: UInt32 = 0
-        guard CGGetDisplaysWithRect(rect, 0, nil, &count) == .success, count > 0 else { return nil }
-        var displays = [CGDirectDisplayID](repeating: 0, count: Int(count))
-        guard CGGetDisplaysWithRect(rect, count, &displays, &count) == .success else { return nil }
+        guard CGGetDisplaysWithRect(rect, 0, nil, &count) == .success, count > 0 else { throw CaptureError.displayNotFound }
+        var displayIDs = [CGDirectDisplayID](repeating: 0, count: Int(count))
+        guard CGGetDisplaysWithRect(rect, count, &displayIDs, &count) == .success else { throw CaptureError.displayNotFound }
+
+        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        let displays = displayIDs.compactMap { id in content.displays.first { $0.displayID == id } }
+        guard !displays.isEmpty else { throw CaptureError.displayNotFound }
 
         // Fast path: whole rect lives on one display.
         if displays.count == 1 {
-            let bounds = CGDisplayBounds(displays[0])
-            let local = rect.offsetBy(dx: -bounds.minX, dy: -bounds.minY)
-            return CGDisplayCreateImage(displays[0], rect: local)
+            let bounds = CGDisplayBounds(displays[0].displayID)
+            return try await capture(display: displays[0], sourceRect: rect.offsetBy(dx: -bounds.minX, dy: -bounds.minY))
         }
 
         // Composite: render at the highest scale among the involved displays.
-        let scale = displays.map(scaleFactor(of:)).max() ?? 1
+        let scale = displays.map { scaleFactor(of: $0.displayID) }.max() ?? 1
         let width = Int((rect.width * scale).rounded())
         let height = Int((rect.height * scale).rounded())
         guard let ctx = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8,
                                   bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
-                                  bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue) else { return nil }
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue) else { throw CaptureError.emptyRect }
         ctx.interpolationQuality = .high
 
         for display in displays {
-            let bounds = CGDisplayBounds(display)
+            let bounds = CGDisplayBounds(display.displayID)
             let piece = bounds.intersection(rect)
             guard !piece.isNull, !piece.isEmpty else { continue }
             let local = piece.offsetBy(dx: -bounds.minX, dy: -bounds.minY)
-            guard let image = CGDisplayCreateImage(display, rect: local) else { continue }
+            let image = try await capture(display: display, sourceRect: local)
             // Destination in the bitmap: CG contexts are bottom-left origin, CG display space is top-left.
             let dest = CGRect(x: (piece.minX - rect.minX) * scale,
                               y: (rect.maxY - piece.maxY) * scale,
@@ -68,7 +82,35 @@ enum ScreenCapture {
                               height: piece.height * scale)
             ctx.draw(image, in: dest)
         }
-        return ctx.makeImage()
+        guard let image = ctx.makeImage() else { throw CaptureError.emptyRect }
+        return image
+    }
+
+    // MARK: - ScreenCaptureKit
+
+    private static func scDisplay(for displayID: CGDirectDisplayID) async throws -> SCDisplay {
+        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        guard let display = content.displays.first(where: { $0.displayID == displayID }) else {
+            throw CaptureError.displayNotFound
+        }
+        return display
+    }
+
+    /// Captures `sourceRect` (display-local points, top-left origin) of a display, or the whole
+    /// display when nil, at the display's native pixel density.
+    private static func capture(display: SCDisplay, sourceRect: CGRect?) async throws -> CGImage {
+        let filter = SCContentFilter(display: display, excludingWindows: [])
+        let scale = CGFloat(filter.pointPixelScale)
+        let area = sourceRect ?? CGRect(x: 0, y: 0, width: display.width, height: display.height)
+
+        let config = SCStreamConfiguration()
+        if let sourceRect { config.sourceRect = sourceRect }
+        config.width = max(1, Int((area.width * scale).rounded()))
+        config.height = max(1, Int((area.height * scale).rounded()))
+        config.showsCursor = false
+        config.captureResolution = .best
+        config.colorSpaceName = CGColorSpace.sRGB
+        return try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
     }
 
     /// Converts an AppKit global rect (bottom-left origin) to CoreGraphics global space (top-left origin).

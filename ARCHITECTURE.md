@@ -76,7 +76,7 @@ altri progetti (iRufus, reika-monitor, wolwatcher, NetScout) è:
   1. seleziona un **SDK CLT funzionante** (evita i problemi SwiftUI-macro dell'SDK più recente),
   2. `swift build -c release --product iShot`,
   3. **impacchetta** il binario in `build/iShot.app` con `Info.plist` (`LSUIElement=true`),
-  4. **firma ad-hoc** (`codesign -s -`) e verifica.
+  4. **firma con il certificato locale "iShot Local Signing"** (ad-hoc solo se manca) e verifica; con `--install` copia in `/Applications`.
 
 → Seguo esattamente questa convenzione.
 
@@ -84,7 +84,7 @@ altri progetti (iRufus, reika-monitor, wolwatcher, NetScout) è:
 | Area | Scelta | Motivo |
 |---|---|---|
 | UI | **AppKit** (NSWindow/NSView/NSStatusItem) | app menu bar + drawing custom; SwiftUI non serve e complica la build CLT |
-| Cattura schermo | **CoreGraphics** (`CGDisplayCreateImage`) | semplice, nativo, non richiede permessi extra oltre Screen Recording |
+| Cattura schermo | **ScreenCaptureKit** (`SCScreenshotManager`) | API attuale; `CGDisplayCreateImage` è deprecata e fa richiedere di nuovo il permesso |
 | Selezione regione | **overlay** borderless a schermo intero + drag | standard per screenshot tool |
 | OCR | **Vision** (`VNRecognizeTextRequest`) | nativo, offline, niente dipendenze |
 | Scorciatoia globale | **Carbon** `RegisterEventHotKey` | API nativa, nessuna libreria esterna |
@@ -119,7 +119,7 @@ Lottie, 7 lingue (parto da en + it), helper separato (registro nello stesso proc
 │       ├── AppDelegate.swift           # setup status item, menu, shortcut, windows
 │       ├── StatusMenu.swift            # menu della barra (Capture/OCR/Record/Settings/Quit)
 │       ├── Capture/
-│       │   ├── ScreenCapture.swift     # CGDisplayCreateImage, fullscreen/regione
+│       │   ├── ScreenCapture.swift     # SCScreenshotManager, fullscreen/regione
 │       │   └── RegionOverlay.swift     # overlay selezione regione (drag, multi-schermo)
 │       ├── Editor/
 │       │   ├── Annotation.swift        # modello: tipo, punti, colore, spessore
@@ -139,7 +139,7 @@ Lottie, 7 lingue (parto da en + it), helper separato (registro nello stesso proc
 │           ├── PinWindow.swift         # finestra floating "pin"
 │           └── Exporter.swift          # salva file / copia clipboard / share
 ├── scripts/
-│   └── build-app.sh            # build release + bundle .app + firma ad-hoc
+│   └── build-app.sh            # build release + bundle .app + firma con certificato locale (+ --install)
 └── build/
     └── iShot.app               ← prodotto (generato)
 ```
@@ -221,7 +221,7 @@ struct Settings {
    - `LSMinimumSystemVersion = 14.0`
    - `NSHighResolutionCapable = true`
    - `NSCameraUsageDescription`/screen recording note (permessi)
-6. `codesign --force --sign - build/iShot.app` (ad-hoc) + `codesign --verify`.
+6. `codesign --force --sign "iShot Local Signing" build/iShot.app` + `codesign --verify` (identità stabile: il permesso Screen Recording sopravvive ai rebuild).
 
 ### 5.2 Avvio
 ```
@@ -265,6 +265,6 @@ open build/iShot.app
 
 **v0.1.0** — tutti gli step del piano completati:
 - 16 file Swift (~2550 righe), tutti i moduli del §4.2 implementati.
-- Build release + bundle + firma ad-hoc via `scripts/build-app.sh`; icona `AppIcon.icns` generata.
+- Build release + bundle + firma con certificato locale via `scripts/build-app.sh`; icona `AppIcon.icns` generata.
 - Smoke test: l'app parte e resta in esecuzione come menu bar app.
 - Versione: `CFBundleShortVersionString = 0.1.0`, `CFBundleVersion` = numero commit git.
