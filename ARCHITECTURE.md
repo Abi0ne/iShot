@@ -297,3 +297,10 @@ open build/iShot.app
 - Scorciatoia globale configurabile per "Capture Fullscreen" (predefinita ⌥⇧F, Reset/Clear nelle
   impostazioni, controllo duplicati con quella della regione). `GlobalShortcut` ora ha un `id` per
   istanza, così più scorciatoie convivono.
+
+**v0.1.5**
+- Scorciatoie generalizzate (`ShortcutAction`: regione, schermo intero, registrazione), con Reset/Clear
+  e controllo duplicati su tutte; nuova scorciatoia **⌥⇧R** per avviare/fermare la registrazione.
+- Condivisione: `ShareExtras` gestisce un elenco di app di messaggistica, ognuna visibile solo se
+  installata — WhatsApp (apre il file), Mattermost (appunti + toast "⌘V"), Telegram (estensione
+  di sistema, spostata in cima). `Toast`: avviso flottante che non ruba il focus.

@@ -19,6 +19,8 @@ struct Hotkey: Equatable {
     static let `default` = Hotkey(keyCode: UInt32(kVK_ANSI_A), carbonModifiers: UInt32(optionKey | shiftKey))
     /// Default combo for Capture Fullscreen: ⌥⇧F.
     static let fullscreenDefault = Hotkey(keyCode: UInt32(kVK_ANSI_F), carbonModifiers: UInt32(optionKey | shiftKey))
+    /// Default combo for Record Screen / Stop Recording: ⌥⇧R.
+    static let recordDefault = Hotkey(keyCode: UInt32(kVK_ANSI_R), carbonModifiers: UInt32(optionKey | shiftKey))
 
     /// Human-readable representation, e.g. "⌥⇧A".
     var displayString: String {
@@ -70,6 +72,47 @@ struct Hotkey: Equatable {
     }
 }
 
+/// Actions that have a global keyboard shortcut.
+enum ShortcutAction: CaseIterable {
+    case region, fullscreen, record
+
+    var title: String {
+        switch self {
+        case .region: return "Capture Region"
+        case .fullscreen: return "Capture Fullscreen"
+        case .record: return "Record Screen"
+        }
+    }
+
+    var settingsLabel: String {
+        switch self {
+        case .region: return "Region shortcut:"
+        case .fullscreen: return "Fullscreen shortcut:"
+        case .record: return "Recording shortcut:"
+        }
+    }
+
+    var defaultHotkey: Hotkey {
+        switch self {
+        case .region: return .default
+        case .fullscreen: return .fullscreenDefault
+        case .record: return .recordDefault
+        }
+    }
+
+    /// Capture Region always keeps a shortcut; the others can be turned off.
+    var canBeTurnedOff: Bool { self != .region }
+
+    /// Carbon hotkey id (unique per action).
+    var hotkeyID: UInt32 {
+        switch self {
+        case .region: return 1
+        case .fullscreen: return 2
+        case .record: return 3
+        }
+    }
+}
+
 extension Notification.Name {
     static let settingsHotkeyChanged = Notification.Name("iShot.settingsHotkeyChanged")
 }
@@ -88,6 +131,9 @@ final class SettingsStore {
         static let fullscreenKeyCode = "fullscreenHotkeyKeyCode"
         static let fullscreenModifiers = "fullscreenHotkeyModifiers"
         static let fullscreenDisabled = "fullscreenHotkeyDisabled"
+        static let recordKeyCode = "recordHotkeyKeyCode"
+        static let recordModifiers = "recordHotkeyModifiers"
+        static let recordDisabled = "recordHotkeyDisabled"
         static let checkForUpdates = "checkForUpdates"
         static let skippedVersion = "skippedVersion"
     }
@@ -143,24 +189,54 @@ final class SettingsStore {
 
     /// Global shortcut for Capture Fullscreen; nil when turned off.
     var fullscreenHotkey: Hotkey? {
-        get {
-            if defaults.bool(forKey: Key.fullscreenDisabled) { return nil }
-            guard defaults.object(forKey: Key.fullscreenKeyCode) != nil else { return .fullscreenDefault }
-            return Hotkey(
-                keyCode: UInt32(defaults.integer(forKey: Key.fullscreenKeyCode)),
-                carbonModifiers: UInt32(defaults.integer(forKey: Key.fullscreenModifiers))
-            )
+        get { optionalHotkey(Key.fullscreenKeyCode, Key.fullscreenModifiers, Key.fullscreenDisabled, default: .fullscreenDefault) }
+        set { setOptionalHotkey(newValue, Key.fullscreenKeyCode, Key.fullscreenModifiers, Key.fullscreenDisabled) }
+    }
+
+    /// Global shortcut for Record Screen / Stop Recording; nil when turned off.
+    var recordHotkey: Hotkey? {
+        get { optionalHotkey(Key.recordKeyCode, Key.recordModifiers, Key.recordDisabled, default: .recordDefault) }
+        set { setOptionalHotkey(newValue, Key.recordKeyCode, Key.recordModifiers, Key.recordDisabled) }
+    }
+
+    func hotkey(for action: ShortcutAction) -> Hotkey? {
+        switch action {
+        case .region: return hotkey
+        case .fullscreen: return fullscreenHotkey
+        case .record: return recordHotkey
         }
-        set {
-            if let newValue {
-                defaults.set(false, forKey: Key.fullscreenDisabled)
-                defaults.set(Int(newValue.keyCode), forKey: Key.fullscreenKeyCode)
-                defaults.set(Int(newValue.carbonModifiers), forKey: Key.fullscreenModifiers)
-            } else {
-                defaults.set(true, forKey: Key.fullscreenDisabled)
-            }
-            NotificationCenter.default.post(name: .settingsHotkeyChanged, object: self)
+    }
+
+    /// nil turns the shortcut off (ignored for Capture Region, which always has one).
+    func setHotkey(_ value: Hotkey?, for action: ShortcutAction) {
+        switch action {
+        case .region: if let value { hotkey = value }
+        case .fullscreen: fullscreenHotkey = value
+        case .record: recordHotkey = value
         }
+    }
+
+    /// The other action already using `hotkey`, if any.
+    func action(using hotkey: Hotkey, except action: ShortcutAction) -> ShortcutAction? {
+        ShortcutAction.allCases.first { $0 != action && self.hotkey(for: $0) == hotkey }
+    }
+
+    private func optionalHotkey(_ codeKey: String, _ modsKey: String, _ disabledKey: String, default value: Hotkey) -> Hotkey? {
+        if defaults.bool(forKey: disabledKey) { return nil }
+        guard defaults.object(forKey: codeKey) != nil else { return value }
+        return Hotkey(keyCode: UInt32(defaults.integer(forKey: codeKey)),
+                      carbonModifiers: UInt32(defaults.integer(forKey: modsKey)))
+    }
+
+    private func setOptionalHotkey(_ value: Hotkey?, _ codeKey: String, _ modsKey: String, _ disabledKey: String) {
+        if let value {
+            defaults.set(false, forKey: disabledKey)
+            defaults.set(Int(value.keyCode), forKey: codeKey)
+            defaults.set(Int(value.carbonModifiers), forKey: modsKey)
+        } else {
+            defaults.set(true, forKey: disabledKey)
+        }
+        NotificationCenter.default.post(name: .settingsHotkeyChanged, object: self)
     }
 
     var launchAtLogin: Bool {

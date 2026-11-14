@@ -48,9 +48,12 @@ iShot has no Dock icon. Look for the viewfinder icon in the menu bar.
   - There are 8 preset colors plus a custom color well, and 6 line widths (the width also sets the text size).
   - Use Undo (⌘Z) or Clear to remove changes. With the select tool, ⌫ deletes the selected annotation and a double-click edits text.
 - **Actions**: Save (↩ / ⌘S), Copy (⌘C), Pin (⌘P), OCR, Share, Cancel (Esc).
-- **Share**: the system share menu, plus a **WhatsApp** entry. WhatsApp for Mac has no Share extension, so
-  macOS cannot list it; iShot opens the screenshot in WhatsApp directly and also copies it to the clipboard
-  (⌘V in a chat works as a fallback).
+- **Share**: the system share menu with messaging apps on top, each shown only if its desktop app is installed:
+  - **WhatsApp**: WhatsApp for Mac has no Share extension, so iShot adds the entry itself; it opens the
+    screenshot in WhatsApp and also copies it to the clipboard (⌘V in a chat works as a fallback).
+  - **Mattermost**: Mattermost Desktop has no Share extension and does not open files, so iShot copies the
+    image, brings Mattermost to the front and shows a toast: paste it into a channel with ⌘V.
+  - **Telegram**: provided by Telegram's own Share extension, moved to the top of the list.
 - **Pin**: shows the image in a borderless window that stays on top. Drag it to move it, scroll to zoom,
   and double-click or press Esc to close it.
 - **OCR (Live Text)**: press OCR in the editor and the text is recognized on the device and made selectable
@@ -59,9 +62,10 @@ iShot has no Dock icon. Look for the viewfinder icon in the menu bar.
   opens the last shot in the editor in text mode. Without Live Text support, the recognized text is
   copied to the clipboard.
 - **Record Screen**: ScreenCaptureKit records the display under the pointer to `.mov` (H.264, 30 fps).
+  Global shortcut **⌥⇧R** by default: press it to start and again to stop (change it or turn it off in Settings).
   Choose *Stop Recording* to finish; the file then appears in Finder.
 - **Settings**: save folder (default `~/Pictures/Screenshots`), format (PNG/JPG), file name prefix
-  (files are named `prefix_YYYYMMDD_HHMMSS.ext`), global shortcuts for region and fullscreen capture, and launch at login.
+  (files are named `prefix_YYYYMMDD_HHMMSS.ext`), global shortcuts for region capture, fullscreen capture and screen recording, and launch at login.
 
 ## Updates
 

@@ -3,8 +3,7 @@ import AppKit
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var statusMenu: StatusMenu!
-    private var shortcut: GlobalShortcut?
-    private var fullscreenShortcut: GlobalShortcut?
+    private var shortcuts: [ShortcutAction: GlobalShortcut] = [:]
     private var overlay: RegionOverlay?
     private let recorder = ScreenRecorder()
     private let settings = SettingsStore.shared
@@ -20,8 +19,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         installMainMenu()
         setupStatusItem()
 
-        shortcut = GlobalShortcut(id: 1) { [weak self] in self?.perform(.captureRegion) }
-        fullscreenShortcut = GlobalShortcut(id: 2) { [weak self] in self?.perform(.captureFullscreen) }
+        for action in ShortcutAction.allCases {
+            shortcuts[action] = GlobalShortcut(id: action.hotkeyID) { [weak self] in self?.perform(Self.command(for: action)) }
+        }
         registerHotkey(showErrors: false)
         NotificationCenter.default.addObserver(forName: .settingsHotkeyChanged, object: nil, queue: .main) { [weak self] _ in
             self?.registerHotkey(showErrors: true)
@@ -36,8 +36,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        shortcut?.unregister()
-        fullscreenShortcut?.unregister()
+        shortcuts.values.forEach { $0.unregister() }
     }
 
     // MARK: - Setup
@@ -84,20 +83,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func registerHotkey(showErrors: Bool) {
-        let region = settings.hotkey
-        let fullscreen = settings.fullscreenHotkey
-        statusMenu.updateHotkeys(region: region, fullscreen: fullscreen)
-
+        var active: [ShortcutAction: Hotkey] = [:]
         var failed: [String] = []
-        if shortcut?.register(region) != true { failed.append(region.displayString) }
-        if let fullscreen {
-            if fullscreenShortcut?.register(fullscreen) != true { failed.append(fullscreen.displayString) }
-        } else {
-            fullscreenShortcut?.unregister()
+        for action in ShortcutAction.allCases {
+            guard let hotkey = settings.hotkey(for: action) else {
+                shortcuts[action]?.unregister()
+                continue
+            }
+            active[action] = hotkey
+            if shortcuts[action]?.register(hotkey) != true { failed.append("\(hotkey.displayString) (\(action.title))") }
         }
+        statusMenu.updateHotkeys(active)
         if !failed.isEmpty && showErrors {
             showAlert(title: "Shortcut unavailable",
                       message: "\(failed.joined(separator: ", ")) could not be registered — it may be used by another app. Choose a different combination in Settings.")
+        }
+    }
+
+    private static func command(for action: ShortcutAction) -> MenuCommand {
+        switch action {
+        case .region: return .captureRegion
+        case .fullscreen: return .captureFullscreen
+        case .record: return .toggleRecording
         }
     }
 
@@ -275,7 +282,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
         NSApp.orderFrontStandardAboutPanel(options: [
             .applicationName: "iShot",
-            .credits: NSAttributedString(string: "Menu-bar screenshot tool: capture, annotate, OCR, pin, share and record.\nShortcuts: region \(settings.hotkey.displayString)" + (settings.fullscreenHotkey.map { ", fullscreen \($0.displayString)" } ?? ""))
+            .credits: NSAttributedString(string: "Menu-bar screenshot tool: capture, annotate, OCR, pin, share and record.\nShortcuts: " + ShortcutAction.allCases.compactMap { action in settings.hotkey(for: action).map { "\(action.title) \($0.displayString)" } }.joined(separator: " · "))
         ])
     }
 

@@ -52,17 +52,22 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         return item
     }
 
-    /// Shows the configured global hotkeys next to the capture items.
-    func updateHotkeys(region: Hotkey, fullscreen: Hotkey?) {
-        captureRegionItem.title = "Capture Region\t\(region.displayString)"
-        captureFullscreenItem.title = "Capture Fullscreen" + (fullscreen.map { "\t\($0.displayString)" } ?? "")
+    private var recordShortcut = ""
+
+    /// Shows the configured global hotkeys next to their menu items.
+    func updateHotkeys(_ hotkeys: [ShortcutAction: Hotkey]) {
+        func suffix(_ action: ShortcutAction) -> String { hotkeys[action].map { "\t\($0.displayString)" } ?? "" }
+        captureRegionItem.title = "Capture Region" + suffix(.region)
+        captureFullscreenItem.title = "Capture Fullscreen" + suffix(.fullscreen)
+        recordShortcut = suffix(.record)
+        recordItem.title = recordItem.title.components(separatedBy: "\t")[0] + recordShortcut
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         let recording = isRecording()
-        recordItem.title = recording ? "Stop Recording" : "Record Screen"
+        recordItem.title = (recording ? "Stop Recording" : "Record Screen") + recordShortcut
         recordItem.image = NSImage(systemSymbolName: recording ? "stop.circle.fill" : "record.circle",
-                                   accessibilityDescription: recordItem.title)
+                                   accessibilityDescription: recording ? "Stop Recording" : "Record Screen")
         ocrItem.isEnabled = hasLastScreenshot()
     }
 
