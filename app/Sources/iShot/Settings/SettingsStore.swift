@@ -15,8 +15,10 @@ struct Hotkey: Equatable {
     var keyCode: UInt32
     var carbonModifiers: UInt32
 
-    /// Default combo: ⌥⇧A.
+    /// Default combo for Capture Region: ⌥⇧A.
     static let `default` = Hotkey(keyCode: UInt32(kVK_ANSI_A), carbonModifiers: UInt32(optionKey | shiftKey))
+    /// Default combo for Capture Fullscreen: ⌥⇧F.
+    static let fullscreenDefault = Hotkey(keyCode: UInt32(kVK_ANSI_F), carbonModifiers: UInt32(optionKey | shiftKey))
 
     /// Human-readable representation, e.g. "⌥⇧A".
     var displayString: String {
@@ -83,6 +85,9 @@ final class SettingsStore {
         static let hotkeyKeyCode = "hotkeyKeyCode"
         static let hotkeyModifiers = "hotkeyModifiers"
         static let launchAtLogin = "launchAtLogin"
+        static let fullscreenKeyCode = "fullscreenHotkeyKeyCode"
+        static let fullscreenModifiers = "fullscreenHotkeyModifiers"
+        static let fullscreenDisabled = "fullscreenHotkeyDisabled"
         static let checkForUpdates = "checkForUpdates"
         static let skippedVersion = "skippedVersion"
     }
@@ -132,6 +137,28 @@ final class SettingsStore {
         set {
             defaults.set(Int(newValue.keyCode), forKey: Key.hotkeyKeyCode)
             defaults.set(Int(newValue.carbonModifiers), forKey: Key.hotkeyModifiers)
+            NotificationCenter.default.post(name: .settingsHotkeyChanged, object: self)
+        }
+    }
+
+    /// Global shortcut for Capture Fullscreen; nil when turned off.
+    var fullscreenHotkey: Hotkey? {
+        get {
+            if defaults.bool(forKey: Key.fullscreenDisabled) { return nil }
+            guard defaults.object(forKey: Key.fullscreenKeyCode) != nil else { return .fullscreenDefault }
+            return Hotkey(
+                keyCode: UInt32(defaults.integer(forKey: Key.fullscreenKeyCode)),
+                carbonModifiers: UInt32(defaults.integer(forKey: Key.fullscreenModifiers))
+            )
+        }
+        set {
+            if let newValue {
+                defaults.set(false, forKey: Key.fullscreenDisabled)
+                defaults.set(Int(newValue.keyCode), forKey: Key.fullscreenKeyCode)
+                defaults.set(Int(newValue.carbonModifiers), forKey: Key.fullscreenModifiers)
+            } else {
+                defaults.set(true, forKey: Key.fullscreenDisabled)
+            }
             NotificationCenter.default.post(name: .settingsHotkeyChanged, object: self)
         }
     }

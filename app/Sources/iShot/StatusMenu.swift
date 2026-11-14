@@ -11,6 +11,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     private let handler: (MenuCommand) -> Void
 
     private var captureRegionItem: NSMenuItem!
+    private var captureFullscreenItem: NSMenuItem!
     private var recordItem: NSMenuItem!
     private var ocrItem: NSMenuItem!
 
@@ -29,7 +30,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         menu.autoenablesItems = false
 
         captureRegionItem = add("Capture Region", symbol: "crop", command: .captureRegion)
-        add("Capture Fullscreen", symbol: "rectangle.dashed", command: .captureFullscreen)
+        captureFullscreenItem = add("Capture Fullscreen", symbol: "rectangle.dashed", command: .captureFullscreen)
         recordItem = add("Record Screen", symbol: "record.circle", command: .toggleRecording)
         menu.addItem(.separator())
         ocrItem = add("OCR Last Screenshot", symbol: "text.viewfinder", command: .ocrLastScreenshot)
@@ -51,9 +52,10 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         return item
     }
 
-    /// Shows the configured global hotkey next to "Capture Region".
-    func updateHotkey(_ hotkey: Hotkey) {
-        captureRegionItem.title = "Capture Region\t\(hotkey.displayString)"
+    /// Shows the configured global hotkeys next to the capture items.
+    func updateHotkeys(region: Hotkey, fullscreen: Hotkey?) {
+        captureRegionItem.title = "Capture Region\t\(region.displayString)"
+        captureFullscreenItem.title = "Capture Fullscreen" + (fullscreen.map { "\t\($0.displayString)" } ?? "")
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {

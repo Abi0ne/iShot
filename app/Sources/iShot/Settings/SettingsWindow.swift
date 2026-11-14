@@ -9,6 +9,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
     private let formatPopup = NSPopUpButton(frame: .zero, pullsDown: false)
     private let prefixField = NSTextField()
     private let hotkeyRecorder = HotkeyRecorderButton()
+    private let fullscreenRecorder = HotkeyRecorderButton()
     private let launchCheckbox = NSButton(checkboxWithTitle: "Launch iShot at login", target: nil, action: nil)
     private let updatesCheckbox = NSButton(checkboxWithTitle: "Check for updates when iShot opens", target: nil, action: nil)
     private let previewLabel = NSTextField(labelWithString: "")
@@ -60,11 +61,32 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
         prefixRow.spacing = 8
 
         hotkeyRecorder.onChange = { [weak self] hotkey in
-            self?.store.hotkey = hotkey
+            guard let self else { return }
+            guard hotkey != self.store.fullscreenHotkey else {
+                self.rejectDuplicate(hotkey, usedBy: "Capture Fullscreen")
+                self.hotkeyRecorder.hotkey = self.store.hotkey
+                return
+            }
+            self.store.hotkey = hotkey
         }
         let resetHotkey = NSButton(title: "Reset", target: self, action: #selector(resetHotkey))
         let hotkeyRow = NSStackView(views: [hotkeyRecorder, resetHotkey])
         hotkeyRow.spacing = 6
+
+        fullscreenRecorder.onChange = { [weak self] hotkey in
+            guard let self else { return }
+            guard hotkey != self.store.hotkey else {
+                self.rejectDuplicate(hotkey, usedBy: "Capture Region")
+                self.fullscreenRecorder.hotkey = self.store.fullscreenHotkey
+                return
+            }
+            self.store.fullscreenHotkey = hotkey
+        }
+        let resetFullscreen = NSButton(title: "Reset", target: self, action: #selector(resetFullscreenHotkey))
+        let clearFullscreen = NSButton(title: "Clear", target: self, action: #selector(clearFullscreenHotkey))
+        clearFullscreen.toolTip = "Turn off the fullscreen shortcut"
+        let fullscreenRow = NSStackView(views: [fullscreenRecorder, resetFullscreen, clearFullscreen])
+        fullscreenRow.spacing = 6
 
         launchCheckbox.target = self
         launchCheckbox.action = #selector(launchChanged)
@@ -81,7 +103,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
             [label("Save to:"), folderRow],
             [label("Format:"), formatPopup],
             [label("File name prefix:"), prefixRow],
-            [label("Capture shortcut:"), hotkeyRow],
+            [label("Region shortcut:"), hotkeyRow],
+            [label("Fullscreen shortcut:"), fullscreenRow],
             [label("Startup:"), launchCheckbox],
             [label("Updates:"), updatesRow]
         ])
@@ -120,6 +143,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
         formatPopup.selectItem(at: ImageFormat.allCases.firstIndex(of: store.format) ?? 0)
         prefixField.stringValue = store.fileNamePrefix
         hotkeyRecorder.hotkey = store.hotkey
+        fullscreenRecorder.hotkey = store.fullscreenHotkey
         launchCheckbox.state = store.launchAtLogin ? .on : .off
         updatesCheckbox.state = store.checkForUpdates ? .on : .off
         updatePreview()
@@ -159,8 +183,33 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
     }
 
     @objc private func resetHotkey() {
+        guard Hotkey.default != store.fullscreenHotkey else {
+            rejectDuplicate(.default, usedBy: "Capture Fullscreen")
+            return
+        }
         store.hotkey = .default
         hotkeyRecorder.hotkey = .default
+    }
+
+    @objc private func resetFullscreenHotkey() {
+        guard Hotkey.fullscreenDefault != store.hotkey else {
+            rejectDuplicate(.fullscreenDefault, usedBy: "Capture Region")
+            return
+        }
+        store.fullscreenHotkey = .fullscreenDefault
+        fullscreenRecorder.hotkey = .fullscreenDefault
+    }
+
+    @objc private func clearFullscreenHotkey() {
+        store.fullscreenHotkey = nil
+        fullscreenRecorder.hotkey = nil
+    }
+
+    private func rejectDuplicate(_ hotkey: Hotkey, usedBy action: String) {
+        let alert = NSAlert()
+        alert.messageText = "Shortcut already in use"
+        alert.informativeText = "\(hotkey.displayString) is already the shortcut for \(action). Choose a different combination."
+        if let window { alert.beginSheetModal(for: window) } else { alert.runModal() }
     }
 
     @objc private func updatesChanged() {
@@ -191,12 +240,14 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
 
     func windowWillClose(_ notification: Notification) {
         hotkeyRecorder.stopRecording()
+        fullscreenRecorder.stopRecording()
     }
 }
 
 /// Button that records the next key combo pressed while it is active.
 final class HotkeyRecorderButton: NSButton {
-    var hotkey: Hotkey = .default { didSet { refreshTitle() } }
+    /// nil shows "None" (shortcut turned off).
+    var hotkey: Hotkey? = .default { didSet { refreshTitle() } }
     var onChange: ((Hotkey) -> Void)?
 
     private var monitor: Any?
@@ -245,6 +296,6 @@ final class HotkeyRecorderButton: NSButton {
     }
 
     private func refreshTitle() {
-        title = isRecording ? "Press shortcut… (Esc cancels)" : hotkey.displayString
+        title = isRecording ? "Press shortcut… (Esc cancels)" : (hotkey?.displayString ?? "None")
     }
 }

@@ -41,7 +41,8 @@ iShot has no Dock icon. Look for the viewfinder icon in the menu bar.
     part of it (ScreenCaptureKit window capture).
   - **Drag** anywhere to select a custom area; a label shows the size in pixels while you drag.
   - Press Esc or right-click to cancel. The default global shortcut is **⌥⇧A** (you can change it in Settings).
-- **Capture Fullscreen**: captures the display under the mouse pointer.
+- **Capture Fullscreen**: captures the display under the mouse pointer. Global shortcut **⌥⇧F** by default
+  (change it, reset it or turn it off with *Clear* in Settings).
 - **Editor tools**: select/move, pen (smoothed), rectangle, ellipse, line, arrow, text and mosaic (pixelation).
   - Hold ⇧ while dragging to draw squares or circles, or to snap lines to 45°.
   - There are 8 preset colors plus a custom color well, and 6 line widths (the width also sets the text size).
@@ -60,7 +61,7 @@ iShot has no Dock icon. Look for the viewfinder icon in the menu bar.
 - **Record Screen**: ScreenCaptureKit records the display under the pointer to `.mov` (H.264, 30 fps).
   Choose *Stop Recording* to finish; the file then appears in Finder.
 - **Settings**: save folder (default `~/Pictures/Screenshots`), format (PNG/JPG), file name prefix
-  (files are named `prefix_YYYYMMDD_HHMMSS.ext`), global shortcut recorder and launch at login.
+  (files are named `prefix_YYYYMMDD_HHMMSS.ext`), global shortcuts for region and fullscreen capture, and launch at login.
 
 ## Updates
 

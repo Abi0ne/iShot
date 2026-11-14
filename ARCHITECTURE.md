@@ -292,3 +292,8 @@ open build/iShot.app
   selezione libera come prima.
 - Finestra dell'editor adattiva: si dimensiona sulla cattura (max 85% dello schermo, con zoom out);
   le catture piccole restano centrate (`CenteringClipView`) in una finestra compatta, con ombra.
+
+**v0.1.4**
+- Scorciatoia globale configurabile per "Capture Fullscreen" (predefinita ⌥⇧F, Reset/Clear nelle
+  impostazioni, controllo duplicati con quella della regione). `GlobalShortcut` ora ha un `id` per
+  istanza, così più scorciatoie convivono.

@@ -13,7 +13,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP_DIR="$ROOT/build/iShot.app"
-VERSION="0.1.3"
+VERSION="0.1.4"
 BUILD_NUMBER="$(git -C "$ROOT" rev-list --count HEAD 2>/dev/null || echo 1)"
 LOCAL_IDENTITY="iShot Local Signing"
 INSTALL_DIR="/Applications/iShot.app"
