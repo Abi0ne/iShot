@@ -1,0 +1,62 @@
+[package]
+name = "ishot"
+# Keep in sync with VERSION in scripts/build-app.sh: one GitHub release ships both the macOS
+# iShot.zip and the Linux .deb, and both updaters compare against the release tag.
+version = "0.1.6"
+edition = "2021"
+description = "Screenshot tool: capture, annotate, OCR, pin, share and record the screen"
+homepage = "https://github.com/Abi0ne/iShot"
+repository = "https://github.com/Abi0ne/iShot"
+license = "LicenseRef-Proprietary"
+publish = false
+
+[dependencies]
+gtk = { package = "gtk4", version = "0.11", features = ["v4_12"] }
+gdk_x11 = { package = "gdk4-x11", version = "0.11" }
+x11rb = "0.14"
+ashpd = { version = "0.14", default-features = false, features = ["async-io", "screenshot", "screencast", "global_shortcuts"] }
+ksni = { version = "0.3", default-features = false, features = ["async-io", "blocking"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "1"
+ureq = "3"
+async-channel = "2"
+sha2 = "0.11"
+libc = "0.2"
+futures-util = "0.3"
+ort = { version = "2.0.0-rc.15", default-features = false, features = ["std", "download-binaries", "tls-rustls"] }
+
+[profile.release]
+lto = "thin"
+strip = true
+
+[package.metadata.deb]
+name = "ishot"
+maintainer = "Abi0ne <Abi0ne@users.noreply.github.com>"
+copyright = "iShot authors"
+section = "graphics"
+revision = ""
+priority = "optional"
+extended-description = """\
+iShot lives in the panel: capture a region, the window in front or the whole screen, \
+annotate the shot (pen, shapes, arrows, text, mosaic), copy it, save it, pin it on screen, \
+recognize its text (OCR) and share it. It can also record the screen. \
+It adapts to the desktop it runs on: X11 (XFCE, KDE/GNOME on Xorg) or Wayland portals \
+(KDE Plasma, GNOME)."""
+depends = "$auto"
+recommends = "ffmpeg, xdg-desktop-portal, gstreamer1.0-tools, gstreamer1.0-pipewire, gstreamer1.0-plugins-good, gstreamer1.0-plugins-ugly, pkexec"
+suggests = "tesseract-ocr, tesseract-ocr-ita, tesseract-ocr-eng"
+assets = [
+    ["target/release/ishot", "usr/bin/", "755"],
+    ["data/io.github.abi0ne.iShot.desktop", "usr/share/applications/", "644"],
+    ["data/icons/ishot-32.png", "usr/share/icons/hicolor/32x32/apps/io.github.abi0ne.iShot.png", "644"],
+    ["data/icons/ishot-48.png", "usr/share/icons/hicolor/48x48/apps/io.github.abi0ne.iShot.png", "644"],
+    ["data/icons/ishot-64.png", "usr/share/icons/hicolor/64x64/apps/io.github.abi0ne.iShot.png", "644"],
+    ["data/icons/ishot-128.png", "usr/share/icons/hicolor/128x128/apps/io.github.abi0ne.iShot.png", "644"],
+    ["data/icons/ishot-256.png", "usr/share/icons/hicolor/256x256/apps/io.github.abi0ne.iShot.png", "644"],
+    ["models/PP-OCRv6_det_small.onnx", "usr/share/ishot/ocr/", "644"],
+    ["models/PP-OCRv6_rec_small.onnx", "usr/share/ishot/ocr/", "644"],
+    ["models/LICENSE-PaddleOCR.txt", "usr/share/ishot/ocr/", "644"],
+    ["README.md", "usr/share/doc/ishot/README.md", "644"],
+]

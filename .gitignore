@@ -11,3 +11,7 @@ build/
 *.swp
 .idea/
 .vscode/
+
+# Linux port
+linux/target/
+linux/models/

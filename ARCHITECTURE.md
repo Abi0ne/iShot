@@ -304,3 +304,27 @@ open build/iShot.app
 - Condivisione: `ShareExtras` gestisce un elenco di app di messaggistica, ognuna visibile solo se
   installata — WhatsApp (apre il file), Mattermost (appunti + toast "⌘V"), Telegram (estensione
   di sistema, spostata in cima). `Toast`: avviso flottante che non ruba il focus.
+
+**v0.1.6 — versione Linux** (`linux/`, Rust + GTK4, pacchetto `.deb`)
+- Si adatta all'ambiente (`env.rs`), scegliendo per ogni funzione il backend disponibile:
+  X11 → cattura diretta (`x11rb`), aggancio finestre (`_NET_CLIENT_LIST_STACKING` + frame extents),
+  scorciatoie con `XGrabKey`, registrazione con ffmpeg `x11grab`;
+  Wayland → portali `Screenshot` / `ScreenCast` (+ GStreamer `pipewiresrc`) / `GlobalShortcuts`
+  (`ashpd`), e su GNOME senza portale le scorciatoie diventano custom keybinding di GNOME.
+- Cattura = immagine congelata del desktop + overlay per monitor (`overlay.rs`); editor GTK4/Cairo
+  con le stesse annotazioni del Mac; OCR con Tesseract (immagine ×2) come livello di testo
+  selezionabile; pin (`_NET_WM_STATE_ABOVE` su X11); icona nel pannello via StatusNotifierItem
+  (`ksni`); condivisione verso app installate (Telegram `-sendpath`, Mattermost/WhatsApp via appunti).
+- Istanza unica (`GApplication`): `ishot --region|--fullscreen|--record|…` inoltra all'istanza attiva.
+- Aggiornamento automatico dalle GitHub Release: `ishot_X.Y.Z_amd64.deb` + `SHA256SUMS`,
+  installazione con `pkexec apt-get install`.
+- Il `.deb` per Debian 13 lo compila `.github/workflows/linux-deb.yml` in un container
+  `debian:trixie` alla pubblicazione della release; `release.sh` verifica che la versione di
+  `linux/Cargo.toml` coincida con `VERSION`.
+- OCR: **RapidOCR PP-OCRv6 small** (`ocr_rapid.rs`, ONNX Runtime via `ort`, modelli in
+  `/usr/share/ishot/ocr`, scaricati da `linux/fetch-models.sh` con verifica SHA-256), Tesseract come
+  riserva. Confronto su 4 catture (testo italiano, terminale, UI, pulsanti colorati), immagine ×2:
+  Tesseract 84,7% parole esatte / 16,3% errori sui caratteri; RapidOCR (Rust) 91,0% / 4,1%;
+  PP-OCRv6 medium 94% ma 11–17 s per cattura, scartato. Pipeline replicata da RapidOCR 3.10
+  (DBNet + CTC) con riquadri allineati agli assi e parole ricavate dai passi CTC.
+- Provato su XFCE (X11, sessione Xvfb di prova). I percorsi Wayland (KDE/GNOME) sono scritti ma da verificare.

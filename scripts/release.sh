@@ -4,6 +4,8 @@
 #   2. scripts/release.sh ["release notes"]
 # Builds and signs the app (with "iShot Local Signing": the updater only accepts apps signed with
 # the same certificate), zips it as iShot.zip, tags vVERSION, pushes and creates the release.
+# Publishing the release starts .github/workflows/linux-deb.yml, which attaches the Linux .deb
+# (built for Debian 13) and SHA256SUMS a few minutes later. VERSION must match linux/Cargo.toml.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -13,6 +15,9 @@ TAG="v$VERSION"
 NOTES="${1:-iShot $VERSION}"
 
 [[ -z "$(git status --porcelain)" ]] || { echo "Commit your changes first." >&2; exit 1; }
+LINUX_VERSION="$(sed -n 's/^version = "\(.*\)"$/\1/p' linux/Cargo.toml | head -1)"
+[[ "$LINUX_VERSION" == "$VERSION" ]] \
+    || { echo "Version mismatch: scripts/build-app.sh has $VERSION, linux/Cargo.toml has $LINUX_VERSION." >&2; exit 1; }
 security find-identity -v -p codesigning | grep -q '"iShot Local Signing"' \
     || { echo "Missing \"iShot Local Signing\": run scripts/create-signing-cert.sh" >&2; exit 1; }
 if gh release view "$TAG" >/dev/null 2>&1; then

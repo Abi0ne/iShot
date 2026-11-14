@@ -1,0 +1,29 @@
+[Desktop Entry]
+Type=Application
+Name=iShot
+GenericName=Screenshot Tool
+Comment=Capture, annotate, OCR, pin, share and record the screen
+Exec=ishot
+Icon=io.github.abi0ne.iShot
+Terminal=false
+Categories=Utility;Graphics;
+Keywords=screenshot;capture;screen;ocr;record;annotate;
+StartupNotify=false
+X-KDE-DBUS-Restricted-Interfaces=org.kde.KWin.ScreenShot2
+Actions=Region;Fullscreen;Record;Settings;
+
+[Desktop Action Region]
+Name=Capture Region
+Exec=ishot --region
+
+[Desktop Action Fullscreen]
+Name=Capture Fullscreen
+Exec=ishot --fullscreen
+
+[Desktop Action Record]
+Name=Record Screen / Stop Recording
+Exec=ishot --record
+
+[Desktop Action Settings]
+Name=Settings
+Exec=ishot --settings

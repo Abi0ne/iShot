@@ -1,0 +1,62 @@
+# Builds the Linux .deb for Debian 13 (trixie) and attaches it, with SHA256SUMS, to the release.
+# Runs when scripts/release.sh publishes a release; can also be started by hand for a tag.
+name: Linux package
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to build and attach the .deb to (e.g. v0.1.6)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  deb:
+    runs-on: ubuntu-latest
+    container: debian:trixie
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - name: Build dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends build-essential pkg-config libgtk-4-dev \
+            curl ca-certificates git dpkg-dev
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - name: Version must match the tag
+        run: |
+          VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' linux/Cargo.toml | head -1)
+          if [ "v$VERSION" != "$TAG" ]; then
+            echo "linux/Cargo.toml version $VERSION does not match $TAG"; exit 1
+          fi
+
+      - name: Rust toolchain
+        run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+
+      - name: OCR models, tests and the .deb
+        run: |
+          . "$HOME/.cargo/env"
+          cargo install cargo-deb --locked
+          cd linux
+          ./fetch-models.sh
+          cargo test --release
+          cargo deb
+          cd target/debian
+          sha256sum ishot_*.deb > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Attach to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          files: |
+            linux/target/debian/ishot_*.deb
+            linux/target/debian/SHA256SUMS

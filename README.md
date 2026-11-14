@@ -4,6 +4,13 @@ A native Swift (AppKit) macOS menu-bar screenshot app. It captures regions or th
 annotate the shot, and can save, copy, pin, share, run OCR and record the screen. It's a clone of
 *iScreen Shoter*. See [ARCHITECTURE.md](ARCHITECTURE.md) for the design.
 
+## Linux
+
+There is also a Linux version in [`linux/`](linux/README.md) (Rust + GTK4), distributed as a `.deb`
+for Debian 13 / Ubuntu 24.04+ with every release. It adapts to the desktop it runs on: on X11
+(XFCE, KDE/GNOME on Xorg) it works like the Mac app, including snapping to the window in front;
+on Wayland (KDE Plasma, GNOME) it goes through the desktop portals.
+
 ## Build
 
 Requirements: macOS 14+, Swift 5.9+ and the Command Line Tools. Xcode is **not** required.
@@ -118,4 +125,6 @@ app/Sources/iShot/             main, AppDelegate, StatusMenu
 scripts/build-app.sh           build + bundle + sign (+ --install)
 scripts/create-signing-cert.sh one-time local code-signing certificate
 scripts/release.sh             publish a GitHub release (picked up by the in-app updater)
+linux/                         Linux version (Rust + GTK4), see linux/README.md
+.github/workflows/linux-deb.yml  builds the Debian 13 .deb and attaches it to each release
 ```
