@@ -138,6 +138,51 @@ pub fn x11_windows() -> (Vec<WindowTarget>, Option<u32>) {
     (out, active)
 }
 
+/// True when one of the windows in front of `target` (the list is front to back) covers part of it.
+pub fn is_covered(windows: &[WindowTarget], target: &WindowTarget) -> bool {
+    windows.iter().take_while(|w| w.id != target.id).any(|w| w.rect.intersect(&target.rect).is_some())
+}
+
+/// Brings a window to the front (EWMH `_NET_ACTIVE_WINDOW`, as a pager would), waits until the
+/// window manager has raised it and it has repainted, then captures the screen again.
+/// Returns the new screenshot and the window's current rect. Blocking: call from a worker thread.
+pub fn x11_raise_and_grab(target: &WindowTarget) -> Result<(Shot, Rect), String> {
+    use x11rb::protocol::xproto::{ClientMessageEvent, ConfigureWindowAux, EventMask, StackMode};
+    let (conn, screen_num) = x11rb::connect(None).map_err(|e| format!("X11: {e}"))?;
+    let root = conn.setup().roots[screen_num].root;
+    let active = atom(&conn, "_NET_ACTIVE_WINDOW");
+    if active != 0 {
+        // data: source = 2 (pager: always honoured), timestamp = CurrentTime, requestor = none.
+        let event = ClientMessageEvent::new(32, target.id, active, [2u32, 0, 0, 0, 0]);
+        let _ = conn.send_event(
+            false,
+            root,
+            EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY,
+            event,
+        );
+    }
+    // Fallback for window managers without EWMH (the WM turns this into a ConfigureRequest).
+    let _ = conn.configure_window(target.id, &ConfigureWindowAux::new().stack_mode(StackMode::ABOVE));
+    let _ = conn.flush();
+
+    // Wait (up to ~1 s) until it is the front window of the stack.
+    let mut rect = target.rect;
+    for _ in 0..20 {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        let (windows, _) = x11_windows();
+        if let Some(w) = windows.iter().find(|w| w.id == target.id) {
+            rect = w.rect;
+        }
+        if windows.first().map(|w| w.id) == Some(target.id) && !is_covered(&windows, target) {
+            break;
+        }
+    }
+    // Let the app and the compositor repaint the uncovered part.
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    drop(conn);
+    Ok((x11_grab_screen()?, rect))
+}
+
 /// Pointer position in root (desktop image) pixels.
 pub fn x11_pointer() -> Option<(f64, f64)> {
     let (conn, screen_num) = x11rb::connect(None).ok()?;

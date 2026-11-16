@@ -26,6 +26,7 @@ pub enum Command {
     Settings,
     CheckUpdates,
     About,
+    ReportProblem,
     ShowControls,
     Quit,
 }
@@ -50,6 +51,7 @@ pub struct App {
     hotkey_tx: async_channel::Sender<ShortcutAction>,
     cmd_tx: async_channel::Sender<Command>,
     tray: RefCell<Option<ksni::blocking::Handle<Tray>>>,
+    tray_online: std::sync::Arc<std::sync::atomic::AtomicBool>,
     capturing: Cell<bool>,
     portal_shortcuts_started: Cell<bool>,
     controls: RefCell<Option<gtk::Window>>,
@@ -70,6 +72,7 @@ impl App {
             hotkey_tx,
             cmd_tx,
             tray: RefCell::new(None),
+            tray_online: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
             capturing: Cell::new(false),
             portal_shortcuts_started: Cell::new(false),
             controls: RefCell::new(None),
@@ -103,11 +106,26 @@ impl App {
         app
     }
 
+    /// True when the panel icon is actually shown.
     pub fn has_tray(&self) -> bool {
-        self.tray.borrow().is_some()
+        self.tray.borrow().is_some() && self.tray_online.load(std::sync::atomic::Ordering::SeqCst)
     }
 
-    fn start_tray(&self) {
+    /// Where to turn the panel icon on, for this desktop.
+    pub fn tray_hint(&self) -> &'static str {
+        let d = &self.env.desktop;
+        if d.contains("xfce") {
+            "Add the tray to the panel: right-click the panel › Panel › Add New Items… › “Status Tray Plugin”."
+        } else if d.contains("kde") {
+            "Add the “System Tray” widget to the panel."
+        } else if self.env.is_gnome() {
+            "Install and enable the “AppIndicator and KStatusNotifierItem Support” GNOME extension (package gnome-shell-extension-appindicator)."
+        } else {
+            "Add a system tray (StatusNotifier) applet to your panel."
+        }
+    }
+
+    fn start_tray(self: &Rc<Self>) {
         use ksni::blocking::TrayMethods;
         let s = self.settings.borrow();
         let key = |a| s.shortcut(a).map(|k| util::accel_label(&k)).unwrap_or_default();
@@ -119,11 +137,25 @@ impl App {
             fullscreen_key: key(ShortcutAction::Fullscreen),
             record_key: key(ShortcutAction::Record),
             icons: tray::icons(),
+            online: self.tray_online.clone(),
         };
-        match tray.spawn() {
+        // Whether a panel is there right now; ksni reports later changes through the tray.
+        self.tray_online.store(Env::tray_watcher_present(), std::sync::atomic::Ordering::SeqCst);
+        // Wait for a panel instead of failing when it is not there yet (session start, panel
+        // restart): the icon appears as soon as one shows up.
+        match tray.assume_sni_available(true).spawn() {
             Ok(handle) => *self.tray.borrow_mut() = Some(handle),
-            Err(err) => eprintln!("iShot: no panel icon ({err})"),
+            Err(err) => crate::logln!("no panel icon ({err})"),
         }
+        // Still no panel after a while: offer the control window and say how to get the icon.
+        let app = self.clone();
+        glib::timeout_add_seconds_local_once(15, move || {
+            if !app.has_tray() {
+                crate::logln!("no panel shows the icon. {}", app.tray_hint());
+                util::notify("iShot has no panel icon", app.tray_hint());
+                app.show_controls();
+            }
+        });
     }
 
     fn update_tray(&self) {
@@ -155,6 +187,7 @@ impl App {
                 glib::spawn_future_local(async move { crate::updater::check(&app, true).await });
             }
             Command::About => self.about(),
+            Command::ReportProblem => crate::report::present(self, false),
             Command::ShowControls => self.show_controls(),
             Command::Quit => self.gtk_app.quit(),
         }
@@ -169,10 +202,11 @@ impl App {
             Some("--record") => Some(Command::ToggleRecording),
             Some("--settings") => Some(Command::Settings),
             Some("--ocr-last") => Some(Command::OcrLast),
+            Some("--report") => Some(Command::ReportProblem),
             Some("--quit") => Some(Command::Quit),
             Some("--background") => None,
             Some(other) => {
-                eprintln!("iShot: unknown option {other} (see ishot --help)");
+                crate::logln!("unknown option {other} (see ishot --help)");
                 None
             }
             // Launched from the app menu: show the controls (always useful without a panel icon).
@@ -303,17 +337,46 @@ impl App {
             }
             let app2 = app.clone();
             let source = shot.clone();
+            let stack = windows.clone();
             overlay::run(&app.gtk_app, &shot, windows, active, move |choice| {
-                app2.capturing.set(false);
-                let rect = match choice {
-                    Some(Choice::Region(r)) => r,
-                    Some(Choice::Window(w)) => w.rect,
-                    None => return,
+                let (rect, raise) = match choice {
+                    Some(Choice::Region(r)) => (r, None),
+                    // A window partly hidden by others: bring it to the front and capture it again.
+                    Some(Choice::Window(w)) => {
+                        let raise = capture::is_covered(&stack, &w).then(|| w.clone());
+                        (w.rect, raise)
+                    }
+                    None => {
+                        app2.capturing.set(false);
+                        return;
+                    }
                 };
-                match source.crop(rect) {
-                    Some(image) => app2.open_editor(image, scale, false),
-                    None => util::alert(None, "Capture failed", "The selected area is outside the screen."),
-                }
+                let Some(target) = raise else {
+                    app2.capturing.set(false);
+                    match source.crop(rect) {
+                        Some(image) => app2.open_editor(image, scale, false),
+                        None => util::alert(None, "Capture failed", "The selected area is outside the screen."),
+                    }
+                    return;
+                };
+                let app3 = app2.clone();
+                glib::spawn_future_local(async move {
+                    let fresh = gio::spawn_blocking(move || capture::x11_raise_and_grab(&target))
+                        .await
+                        .unwrap_or_else(|_| Err("capture crashed".into()));
+                    app3.capturing.set(false);
+                    let image = match fresh {
+                        Ok((shot, rect)) => shot.crop(rect),
+                        Err(err) => {
+                            crate::logln!("cannot raise the window, using the covered capture: {err}");
+                            source.crop(rect)
+                        }
+                    };
+                    match image {
+                        Some(image) => app3.open_editor(image, scale, false),
+                        None => util::alert(None, "Capture failed", "The selected area is outside the screen."),
+                    }
+                });
             });
         });
     }
@@ -423,6 +486,7 @@ impl App {
             ("Record Screen / Stop", Command::ToggleRecording, Some(ShortcutAction::Record)),
             ("OCR Last Screenshot", Command::OcrLast, None),
             ("Settings…", Command::Settings, None),
+            ("Report a Problem…", Command::ReportProblem, None),
             ("Quit iShot", Command::Quit, None),
         ];
         for (title, cmd, action) in entries {
@@ -440,7 +504,10 @@ impl App {
             list.append(&b);
         }
         if !self.has_tray() {
-            let note = gtk::Label::new(Some("No panel icon on this desktop: close this window and iShot keeps running.\nOpen it again from the app menu."));
+            let note = gtk::Label::new(Some(&format!(
+                "No panel icon yet. {}\n\nClose this window and iShot keeps running; open it again from the app menu.",
+                self.tray_hint()
+            )));
             note.add_css_class("dim-label");
             note.set_wrap(true);
             note.set_max_width_chars(40);

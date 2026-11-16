@@ -211,11 +211,17 @@ pub fn present(app: &Rc<App>) {
             glib::spawn_future_local(async move { crate::updater::check(&app, true).await });
         });
     }
+    let report = gtk::Button::with_label("Report a Problem…");
+    {
+        let app = app.clone();
+        report.connect_clicked(move |_| crate::report::present(&app, false));
+    }
     let version = gtk::Label::new(Some(&format!("Version {}", crate::updater::VERSION)));
     version.add_css_class("dim-label");
     let updates_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     updates_row.append(&updates);
     updates_row.append(&check_now);
+    updates_row.append(&report);
     updates_row.append(&version);
     grid.attach(&label("Updates:"), 0, row, 1, 1);
     grid.attach(&updates_row, 1, row, 1, 1);
@@ -229,7 +235,7 @@ pub fn present(app: &Rc<App>) {
     grid.attach(&caps_title, 0, row, 2, 1);
     row += 1;
     let caps = gtk::Box::new(gtk::Orientation::Vertical, 3);
-    for (ok, text) in app.env.capability_report() {
+    for (ok, text) in app.env.capability_report(app.has_tray()) {
         let l = gtk::Label::new(Some(&format!("{}  {text}", if ok { "✓" } else { "✗" })));
         l.set_xalign(0.0);
         l.set_wrap(true);

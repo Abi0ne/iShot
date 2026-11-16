@@ -2,7 +2,9 @@
 
 use crate::app::Command;
 use ksni::menu::StandardItem;
-use ksni::{Icon, MenuItem, ToolTip};
+use ksni::{Icon, MenuItem, OfflineReason, ToolTip};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 pub struct Tray {
     pub tx: async_channel::Sender<Command>,
@@ -13,6 +15,8 @@ pub struct Tray {
     pub fullscreen_key: String,
     pub record_key: String,
     pub icons: Vec<Icon>,
+    /// True while a panel (StatusNotifierWatcher) shows the icon.
+    pub online: Arc<AtomicBool>,
 }
 
 pub fn icons() -> Vec<Icon> {
@@ -75,6 +79,19 @@ impl ksni::Tray for Tray {
         let _ = self.tx.try_send(if self.recording { Command::ToggleRecording } else { Command::CaptureRegion });
     }
 
+    /// The panel came (back): the icon is registered again by ksni.
+    fn watcher_online(&self) {
+        self.online.store(true, Ordering::SeqCst);
+        crate::logln!("panel icon registered");
+    }
+
+    /// No panel right now (not started yet, restarted, or no tray plugin): keep waiting for one.
+    fn watcher_offline(&self, reason: OfflineReason) -> bool {
+        self.online.store(false, Ordering::SeqCst);
+        crate::logln!("waiting for a panel to show the icon ({reason:?})");
+        true
+    }
+
     fn menu(&self) -> Vec<MenuItem<Self>> {
         vec![
             item(with_key("Capture Region", &self.region_key), true, Command::CaptureRegion),
@@ -85,6 +102,7 @@ impl ksni::Tray for Tray {
             MenuItem::Separator,
             item("Settings…".into(), true, Command::Settings),
             item("Check for Updates…".into(), true, Command::CheckUpdates),
+            item("Report a Problem…".into(), true, Command::ReportProblem),
             item("About iShot".into(), true, Command::About),
             MenuItem::Separator,
             item("Quit iShot".into(), true, Command::Quit),

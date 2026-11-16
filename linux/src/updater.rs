@@ -146,7 +146,7 @@ pub async fn check(app: &Rc<App>, user_initiated: bool) {
             return;
         }
         Err(err) => {
-            eprintln!("iShot: update check failed: {err}");
+            crate::logln!("update check failed: {err}");
             if user_initiated {
                 util::alert(None, "Could not check for updates", &err);
             }

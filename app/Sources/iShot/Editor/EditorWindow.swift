@@ -283,7 +283,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         guard let image = finalImage() else { return }
         do {
             let url = try Exporter.save(image)
-            NSLog("iShot: saved \(url.path)")
+            AppLog.write("saved \(url.path)")
             window?.close()
         } catch {
             showError(error)

@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var overlay: RegionOverlay?
     private let recorder = ScreenRecorder()
     private let settings = SettingsStore.shared
+    private var termSource: DispatchSourceSignal?
 
     /// Most recent screenshot (raw capture, replaced by the annotated version once exported).
     private var lastScreenshot: CGImage?
@@ -33,10 +34,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         Updater.shared.checkOnLaunch()
+
+        // kill / logout scripts send SIGTERM: quit cleanly so it is not taken for a crash.
+        signal(SIGTERM, SIG_IGN)
+        let term = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
+        term.setEventHandler { NSApp.terminate(nil) }
+        term.resume()
+        termSource = term
+
+        if AppLog.previousRunCrashed {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { ReportWindowController.present(crashed: true) }
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         shortcuts.values.forEach { $0.unregister() }
+        AppLog.markStopped()
     }
 
     // MARK: - Setup
@@ -118,6 +131,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .ocrLastScreenshot: ocrLastScreenshot()
         case .settings: SettingsWindowController.shared.present()
         case .checkForUpdates: Updater.shared.checkNow()
+        case .reportProblem: ReportWindowController.present(crashed: false)
         case .about: showAbout()
         case .quit: NSApp.terminate(nil)
         }
@@ -216,6 +230,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func showCaptureError(_ error: Error, fallback: String) {
+        AppLog.write("capture failed: \(error)")
         // A TCC denial from ScreenCaptureKit means the permission is missing or stale.
         if !ScreenCapture.hasPermission {
             _ = ensureCapturePermission()
@@ -253,6 +268,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     NSWorkspace.shared.activateFileViewerSelecting([url])
                 } catch {
                     updateStatusIcon()
+                    AppLog.write("recording failed: \(error)")
                     showAlert(title: "Recording failed", message: error.localizedDescription)
                 }
             }
@@ -295,6 +311,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func showAlert(title: String, message: String) {
+        AppLog.write("alert: \(title) — \(message.replacingOccurrences(of: "\n", with: " "))")
         let alert = NSAlert()
         alert.messageText = title
         alert.informativeText = message

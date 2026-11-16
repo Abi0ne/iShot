@@ -90,6 +90,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
         version.font = .systemFont(ofSize: 11)
         let updatesRow = NSStackView(views: [updatesCheckbox, checkNow, version])
         updatesRow.spacing = 8
+        let reportButton = NSButton(title: "Report a Problem…", target: self, action: #selector(reportProblem))
 
         let grid = NSGridView(views: [
             [label("Save to:"), folderRow],
@@ -97,7 +98,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
             [label("File name prefix:"), prefixRow]
         ] + shortcutRows + [
             [label("Startup:"), launchCheckbox],
-            [label("Updates:"), updatesRow]
+            [label("Updates:"), updatesRow],
+            [label("Help:"), reportButton]
         ])
         grid.rowSpacing = 12
         grid.columnSpacing = 10
@@ -207,6 +209,10 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTe
 
     @objc private func updatesChanged() {
         store.checkForUpdates = updatesCheckbox.state == .on
+    }
+
+    @objc private func reportProblem() {
+        ReportWindowController.present(crashed: false)
     }
 
     @objc private func checkForUpdatesNow() {

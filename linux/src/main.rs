@@ -7,11 +7,13 @@ mod capture;
 mod editor;
 mod env;
 mod hotkeys;
+mod log;
 mod ocr;
 mod ocr_rapid;
 mod overlay;
 mod pin;
 mod recorder;
+mod report;
 mod settings;
 mod settings_window;
 mod share;
@@ -39,6 +41,8 @@ Usage: ishot [OPTION]
   --settings      open the settings
   --background    start without showing anything (used at login)
   --quit          quit the running iShot
+  --report        open Report a Problem (log and diagnostics → GitHub issue)
+  --diagnose      print what iShot detects on this desktop (panel tray, portals, OCR…)
   --version       print the version
   --help          show this help
 
@@ -82,6 +86,26 @@ fn main() -> glib::ExitCode {
             println!("{HELP}");
             return glib::ExitCode::SUCCESS;
         }
+        // Diagnostics: what iShot sees on this desktop.
+        Some("--diagnose") => {
+            if gtk::init().is_err() {
+                eprintln!("iShot: cannot open the display");
+                return glib::ExitCode::FAILURE;
+            }
+            let env = env::Env::detect();
+            println!("iShot {} — diagnostics", updater::VERSION);
+            println!("XDG_CURRENT_DESKTOP={}  XDG_SESSION_TYPE={}  WAYLAND_DISPLAY={}  DISPLAY={}",
+                std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default(),
+                std::env::var("XDG_SESSION_TYPE").unwrap_or_default(),
+                std::env::var("WAYLAND_DISPLAY").unwrap_or_default(),
+                std::env::var("DISPLAY").unwrap_or_default());
+            println!("StatusNotifierWatcher on D-Bus: {}", env::Env::tray_watcher_present());
+            println!("StatusNotifier host registered: {}", env.tray_host);
+            for (ok, line) in env.capability_report(env.tray_host) {
+                println!("{} {line}", if ok { "✓" } else { "✗" });
+            }
+            return glib::ExitCode::SUCCESS;
+        }
         // Diagnostics: print the text recognized in an image file.
         Some("--ocr-file") => {
             let Some(path) = args.get(2) else {
@@ -107,12 +131,29 @@ fn main() -> glib::ExitCode {
         _ => {}
     }
 
+    log::init();
+
     // Single instance: a second `ishot --region` is forwarded to the running one.
     let gtk_app = gtk::Application::builder().application_id(APP_ID).flags(gio::ApplicationFlags::HANDLES_COMMAND_LINE).build();
     gtk_app.connect_startup(|gtk_app| {
+        let crashed = log::mark_running();
+        crate::logln!("iShot {} starting (pid {}){}", updater::VERSION, std::process::id(), if crashed { " — previous run ended abnormally" } else { "" });
         install_css();
         gtk::Window::set_default_icon_name(APP_ID);
+        // Logout / kill: quit cleanly so the next start does not report a crash.
+        for signal in [libc::SIGTERM, libc::SIGINT, libc::SIGHUP] {
+            let a = gtk_app.clone();
+            glib_unix::unix_signal_add_local(signal, move || {
+                crate::logln!("signal {signal}: quitting");
+                a.quit();
+                glib::ControlFlow::Break
+            });
+        }
         let app = app::App::new(gtk_app);
+        if crashed {
+            let a = app.clone();
+            glib::timeout_add_seconds_local_once(4, move || report::present(&a, true));
+        }
         APP.with(|a| *a.borrow_mut() = Some(app));
     });
     let first = std::cell::Cell::new(true);
@@ -125,7 +166,9 @@ fn main() -> glib::ExitCode {
         glib::ExitCode::SUCCESS
     });
     gtk_app.connect_shutdown(|_| {
+        crate::logln!("iShot quitting");
         APP.with(|a| a.borrow_mut().take());
+        log::mark_stopped();
     });
     gtk_app.run()
 }

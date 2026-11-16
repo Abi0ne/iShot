@@ -85,7 +85,7 @@ final class Updater {
             if !userInitiated, settings.skippedVersion == release.version { return }
             await offer(release)
         } catch {
-            NSLog("iShot: update check failed: \(error.localizedDescription)")
+            AppLog.write("update check failed: \(error.localizedDescription)")
             if userInitiated { showInfo("Could not check for updates", error.localizedDescription) }
         }
     }

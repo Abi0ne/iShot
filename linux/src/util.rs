@@ -76,6 +76,7 @@ pub fn notify(title: &str, body: &str) {
 
 /// Simple modal message.
 pub fn alert(parent: Option<&gtk::Window>, message: &str, detail: &str) {
+    crate::logln!("alert: {message} — {}", detail.replace('\n', " "));
     let dialog = gtk::AlertDialog::builder().message(message).detail(detail).modal(true).build();
     dialog.show(parent);
 }

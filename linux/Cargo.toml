@@ -2,7 +2,7 @@
 name = "ishot"
 # Keep in sync with VERSION in scripts/build-app.sh: one GitHub release ships both the macOS
 # iShot.zip and the Linux .deb, and both updaters compare against the release tag.
-version = "0.1.6"
+version = "0.1.7"
 edition = "2021"
 description = "Screenshot tool: capture, annotate, OCR, pin, share and record the screen"
 homepage = "https://github.com/Abi0ne/iShot"
@@ -24,6 +24,7 @@ ureq = "3"
 async-channel = "2"
 sha2 = "0.11"
 libc = "0.2"
+glib-unix = "0.22"
 futures-util = "0.3"
 ort = { version = "2.0.0-rc.15", default-features = false, features = ["std", "download-binaries", "tls-rustls"] }
 

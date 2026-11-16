@@ -31,7 +31,7 @@ final class GlobalShortcut {
         let status = RegisterEventHotKey(hotkey.keyCode, hotkey.carbonModifiers, id,
                                          GetApplicationEventTarget(), 0, &ref)
         guard status == noErr, let ref else {
-            NSLog("iShot: RegisterEventHotKey failed (\(status)) for \(hotkey.displayString)")
+            AppLog.write("RegisterEventHotKey failed (\(status)) for \(hotkey.displayString)")
             return false
         }
         hotKeyRef = ref

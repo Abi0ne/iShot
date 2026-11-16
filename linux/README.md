@@ -11,7 +11,7 @@ It adapts to the desktop it runs on:
 | Snap to the window in front | yes | no | no |
 | Global shortcuts | direct | portal | portal (GNOME 48+) or custom keybindings |
 | Recording | ffmpeg | portal + GStreamer | portal + GStreamer |
-| Panel icon | yes | yes | with the AppIndicator extension |
+| Panel icon | yes (needs the “Status Tray Plugin” in the panel) | yes | with the AppIndicator extension |
 
 *Settings › Available on this system* shows what is active on your desktop.
 
@@ -44,9 +44,22 @@ sudo apt install ./ishot_*_amd64.deb
 Recommended packages (installed automatically by apt unless disabled): `ffmpeg` (recording on X11),
 `gstreamer1.0-pipewire` and friends (recording on Wayland). OCR needs nothing extra.
 
+## Problems and crash reports
+
+iShot keeps a log in `~/.cache/ishot/ishot.log` (rotated at 1 MB). When it runs without a
+terminal, GTK messages and crash details go there too.
+
+*Report a Problem…* (panel menu, control window, Settings, or `ishot --report`) collects a
+description, the system diagnostics and the end of the log, shows everything for review (user name
+and home folder are hidden, and every line can be edited) and opens a pre-filled issue on GitHub in
+the browser: it is submitted with your own GitHub account, iShot sends nothing by itself.
+If iShot closed unexpectedly, it offers the report at the next start.
+
+`ishot --diagnose` prints what iShot detects on the desktop (panel tray, portals, OCR…).
+
 ## Command line
 
-`ishot --region | --fullscreen | --record | --ocr-last | --settings | --quit`, forwarded to the
+`ishot --region | --fullscreen | --record | --ocr-last | --settings | --report | --quit`, forwarded to the
 running instance. Bind them to keys in your desktop settings if global shortcuts are unavailable.
 
 ## Build

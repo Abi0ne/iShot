@@ -74,6 +74,13 @@ iShot has no Dock icon. Look for the viewfinder icon in the menu bar.
 - **Settings**: save folder (default `~/Pictures/Screenshots`), format (PNG/JPG), file name prefix
   (files are named `prefix_YYYYMMDD_HHMMSS.ext`), global shortcuts for region capture, fullscreen capture and screen recording, and launch at login.
 
+## Logs and problem reports
+
+iShot keeps a log in `~/Library/Logs/iShot/iShot.log`. *Report a Problem…* (menu bar or Settings) collects a
+description, system details and the end of the log — user name and home folder hidden, everything editable —
+and opens a pre-filled issue on GitHub, which you submit with your own account (iShot sends nothing by itself).
+If iShot crashed, the report opens by itself at the next launch, with the crash details.
+
 ## Updates
 
 At launch iShot checks the latest [GitHub release](https://github.com/Abi0ne/iShot/releases). If it is newer
@@ -121,7 +128,7 @@ app/Sources/iShot/             main, AppDelegate, StatusMenu
   Recording/                   ScreenRecorder (ScreenCaptureKit)
   Settings/                    SettingsStore, SettingsWindow
   Shortcut/                    GlobalShortcut (Carbon hotkey)
-  Support/                     Exporter, PinWindow, Updater (GitHub releases)
+  Support/                     Exporter, PinWindow, Updater (GitHub releases), AppLog, ReportWindow
 scripts/build-app.sh           build + bundle + sign (+ --install)
 scripts/create-signing-cert.sh one-time local code-signing certificate
 scripts/release.sh             publish a GitHub release (picked up by the in-app updater)

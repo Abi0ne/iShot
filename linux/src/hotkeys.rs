@@ -208,7 +208,7 @@ pub fn gnome_apply(bindings: &Bindings) -> Result<(), String> {
 pub fn spawn_portal(bindings: Bindings, tx: async_channel::Sender<ShortcutAction>) {
     glib::spawn_future_local(async move {
         if let Err(err) = portal_run(bindings, tx).await {
-            eprintln!("iShot: {err}");
+            crate::logln!("{err}");
         }
     });
 }

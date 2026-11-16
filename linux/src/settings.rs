@@ -127,10 +127,10 @@ impl Settings {
         match toml::to_string_pretty(self) {
             Ok(text) => {
                 if let Err(err) = std::fs::write(&path, text) {
-                    eprintln!("iShot: cannot write {}: {err}", path.display());
+                    crate::logln!("cannot write {}: {err}", path.display());
                 }
             }
-            Err(err) => eprintln!("iShot: cannot serialize settings: {err}"),
+            Err(err) => crate::logln!("cannot serialize settings: {err}"),
         }
     }
 

@@ -30,6 +30,28 @@ pub struct Env {
 }
 
 impl Env {
+    /// True when a StatusNotifierWatcher (the service panels use to collect tray icons) runs.
+    pub fn tray_watcher_present() -> bool {
+        gio::bus_get_sync(gio::BusType::Session, gio::Cancellable::NONE)
+            .ok()
+            .and_then(|bus| {
+                bus.call_sync(
+                    Some("org.freedesktop.DBus"),
+                    "/org/freedesktop/DBus",
+                    "org.freedesktop.DBus",
+                    "NameHasOwner",
+                    Some(&("org.kde.StatusNotifierWatcher",).to_variant()),
+                    None,
+                    gio::DBusCallFlags::NONE,
+                    2000,
+                    gio::Cancellable::NONE,
+                )
+                .ok()
+            })
+            .and_then(|reply| reply.child_value(0).get::<bool>())
+            .unwrap_or(false)
+    }
+
     pub fn detect() -> Env {
         let wayland_display = std::env::var_os("WAYLAND_DISPLAY").is_some();
         let session_type = std::env::var("XDG_SESSION_TYPE").unwrap_or_default().to_lowercase();
@@ -138,7 +160,8 @@ impl Env {
     }
 
     /// Human-readable lines for the "Available on this system" section of Settings.
-    pub fn capability_report(&self) -> Vec<(bool, String)> {
+    /// `tray_online`: whether the panel icon is shown right now.
+    pub fn capability_report(&self, tray_online: bool) -> Vec<(bool, String)> {
         let session = match self.session {
             Session::X11 => "X11",
             Session::Wayland => "Wayland",
@@ -175,10 +198,12 @@ impl Env {
             Some(engine) => (true, format!("Text recognition (OCR): {engine}")),
             None => (false, "Text recognition (OCR): models missing — reinstall iShot or install tesseract-ocr".into()),
         });
-        lines.push(if self.tray_host {
-            (true, "Panel icon: available".into())
+        lines.push(if tray_online {
+            (true, "Panel icon: shown".into())
+        } else if Env::tray_watcher_present() {
+            (false, "Panel icon: the panel tray did not accept it yet — try restarting iShot".into())
         } else {
-            (false, "Panel icon: no StatusNotifier host (on GNOME install the AppIndicator extension); use shortcuts or the app launcher".into())
+            (false, "Panel icon: no panel tray found (XFCE: add “Status Tray Plugin”; KDE: “System Tray”; GNOME: AppIndicator extension)".into())
         });
         lines
     }

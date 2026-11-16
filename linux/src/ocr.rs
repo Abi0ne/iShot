@@ -46,7 +46,7 @@ pub fn recognize(png: &[u8]) -> Result<Vec<Word>, String> {
     if crate::ocr_rapid::available() {
         match crate::ocr_rapid::recognize(png) {
             Ok(words) => return Ok(words),
-            Err(err) if crate::util::has_program("tesseract") => eprintln!("iShot: RapidOCR failed ({err}), using Tesseract"),
+            Err(err) if crate::util::has_program("tesseract") => crate::logln!("RapidOCR failed ({err}), using Tesseract"),
             Err(err) => return Err(err),
         }
     }
